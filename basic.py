@@ -38,20 +38,20 @@ class Error:
         self.details = details
     
     def as_string(self):
-        result = f'{self.error_name}: {self.details}'
-        result += f'{self.pos_start.fn}, line {self.pos_start.ln + 1}'
+        result = f'{self.error_name}: {self.details} '
+        result += f'File {self.pos_start.file_name}, line {self.pos_start.ln}'
         return result
 
 class IllegalCharError(Error):
     def __init__(self, pos_start, pos_end, details):
-        super().__init__("Illegal Character", details)
+        super().__init__(pos_start, pos_end, "Illegal Character", details)
 
 ########################
 # POSITION
 ########################
 
 class Position:
-    def __innit__(self, idx, ln, col, file_name, file_txt): # this is the index, line, column, file name and file text
+    def __init__(self, idx, ln, col, file_name, file_txt): # this is the index, line, column, file name and file text
         self.idx = idx
         self.ln = ln
         self.col = col
@@ -83,8 +83,8 @@ class Lexer(object):
     def __init__(self, fn, text):
         self.fn = fn
         self.text = text 
-        self.pos = Position(-1,0,-1) # position is set to index -1, line 0, column -1
-        self.current_char = self.text[self.pos]
+        self.pos = Position(-1,0,-1, fn, text) # position is set to index -1, line 0, column -1
+        self.current_char = self.text[self.pos.idx]
         self.advance() # this makes self.pos = 0 when it's initialized
 
 
@@ -146,13 +146,89 @@ class Lexer(object):
 
 
 
+
+
+
+
 ##########
 # RUN
 ##########
 
 def run(fn,text):
-    lexer  = Lexer(fn,text)
+    lexer  = Lexer(fn, text)
     tokens, error = lexer.make_tokens()
 
     return tokens, error
 
+
+### Grammer
+'''
+expr    : term ((PLUS|MINUS) term)*
+
+term    : factor ((MUL|DIV) factor)*
+
+factor  : INT:FLOAT
+
+'''
+
+##################
+# NODES
+#################
+
+class NumberNode:
+    def __init__(self,tok):
+        self.tok = tok
+
+    def __repr__(self):
+        return f'{self.tok}'
+
+class BinaryOperatorNode:
+    def __init__(self, left_node, op_tok, right_node):
+        self.left = left_node
+        self.op_tok = op_tok
+        self.right_node = right_node
+    
+    def __repr__(self):
+        return f'({self.left_node}, {self.op_tok}, {self.right_node})'
+    
+    
+class Parser:
+    def __init__(self, tokens): # takes in a list of tokens
+        self.tokens = tokens
+        self.tok_idx = -1
+        self.advance()
+    
+    def advance(self):
+        self.tok_idx += 1
+        if self.tok_id < len(self.tokens):
+            self.current_tok = self.tokens[self.tok_idx]
+        return self.current_tok
+    
+    ###########################################################
+
+    def parse(self):
+        res = self.expr()
+        return res
+    
+    def factor(self):
+        tok = self.current_tok
+        if tok.type in (INT, FLOAT):
+            self.advance()
+            return NumberNode(tok)
+        
+
+    def term(self): # Cals self.factor and has MULTIPLY and DIVIDE operators
+        return self.binary_operation(self.factor, (MULTIPLY, DIVIDE))
+
+    def expr(self): # calls self.term and has ADD, SUB operators
+        return self.binary_operation(self.term, (ADD, SUBTRACT))
+
+
+        # This basically takes a function, makes it run it's generic code with it's operator rules
+    def binary_operation(self, func, ops):
+        left = func()
+
+        while self.current_tok in ops:
+            op_tok = self.current_tok
+            right = func()
+            left = BinaryOperatorNode(left, op_tok, right)
