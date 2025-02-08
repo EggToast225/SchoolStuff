@@ -1,4 +1,13 @@
+###############
+#   IMPORTS
+###############
+
+from strings_with_arrows import * 
+
+
 # Rewritten Interpreter
+
+
 
 #Initialize Types and Characters
 # These are End of Files (EOF), ADD, SUBTRACT, MULTIPLY, DIVIDE, FLOAT, INT
@@ -12,9 +21,18 @@
 # The token class specifies the type and value of the character
 
 class Token(object):
-    def __init__(self, type, value=None):
+    def __init__(self, type, value=None, pos_start = None, pos_end = None):
         self.type = type
         self.value = value
+
+        if pos_start:
+            self.pos_start = pos_start.copy()
+            self.pos_end = pos_start.copy()
+            self.pos_end.advance()
+
+        if pos_end:
+            self.pos_end = pos_end.copy() 
+            self.pos_start = pos_end.copy()
 
     def __repr__(self):
         if self.value: return f'{self.type}:{self.value}'
@@ -22,7 +40,7 @@ class Token(object):
 
 
 ############
-# Errors
+# ERRORS
 ############
 
 # The error class shows the position and type of error
@@ -37,11 +55,17 @@ class Error:
     def as_string(self):
         result = f'{self.error_name}: {self.details} '
         result += f'File {self.pos_start.file_name}, line {self.pos_start.ln}'
+        result += '\n\n' + string_with_arrows(self.pos_start.file_txt, self.pos_start, self.pos_end)
         return result
 
 class IllegalCharError(Error):
     def __init__(self, pos_start, pos_end, details):
         super().__init__(pos_start, pos_end, "Illegal Character", details)
+
+class InvalidSyntaxError(Error):
+    def __init__(self, pos_start, pos_end, details):
+        super().__init__(pos_start, pos_end, "Invalid Syntax", details)
+
 
 ########################
 # POSITION
@@ -101,22 +125,22 @@ class Lexer(object):
             elif self.current_char.isdigit():
                 tokens.append(self.make_numbers())
             elif self.current_char == '+':
-                tokens.append(Token(ADD))
+                tokens.append(Token(ADD, pos_start = self.pos))
                 self.advance()
             elif self.current_char == '-':
-                tokens.append(Token(SUBTRACT))
+                tokens.append(Token(SUBTRACT, pos_start = self.pos))
                 self.advance()
             elif self.current_char == '/':
-                tokens.append(Token(DIVIDE))
+                tokens.append(Token(DIVIDE, pos_start = self.pos))
                 self.advance()
             elif self.current_char == '*':
-                tokens.append(Token(MULTIPLY))
+                tokens.append(Token(MULTIPLY, pos_start = self.pos))
                 self.advance()
             elif self.current_char == '(':
-                tokens.append(Token(LPARAN))
+                tokens.append(Token(LPARAN, pos_start = self.pos))
                 self.advance()
             elif self.current_char == ')':
-                tokens.append(Token(RPARAN))
+                tokens.append(Token(RPARAN, pos_start = self.pos))
                 self.advance()
 
             # case of an unrecognized character
@@ -125,13 +149,15 @@ class Lexer(object):
                 char = self.current_char
                 self.advance()
                 return [], IllegalCharError(pos_start, self.pos, "'" + char + "'" ) # returns an empty list and error
-
+            
+        tokens.append(Token(EOF), pos_start=self.pos)
         return tokens, None # return tokens and no Errors
     
     # Determines if the number_str is a float or Integer by the number of dots. 
     def make_numbers(self):
         num_str = ''
         dot_count = 0
+        pos_start = self.pos.copy()
 
         while self.current_char != None and (self.current_char.isdigit() or self.current_char == '.'):
             if self.current_char == '.':
@@ -140,8 +166,8 @@ class Lexer(object):
             num_str += self.current_char
             self.advance()
 
-        if dot_count == 0: return Token(INT, int(num_str) )
-        elif dot_count == 1: return Token(FLOAT, float(num_str))    
+        if dot_count == 0: return Token(INT, int(num_str), pos_start, self.pos)
+        elif dot_count == 1: return Token(FLOAT, float(num_str), pos_start, self.pos)    
 
 
 
@@ -175,6 +201,34 @@ class BinaryOperatorNode:
     
     def __repr__(self):
         return f'({self.left_node}, {self.op_tok}, {self.right_node})'
+    
+
+########################################
+# PARSE RESULT
+###################################
+
+class ParseResult: # Class keeps track of Parse results and Nodes
+    def __init__(self):
+        self.error = None
+        self.node = None
+    
+    def register(self, res):
+        if isinstance(res, ParseResult): #Tracks errors if there is an error
+            if res.error: self.error = res.error
+            return res.node
+    
+        return res
+
+    def success(self, node):
+        self.node = node
+        return self
+    
+    def failure(self,error):
+        self.error = error
+        return self
+
+
+    
 
 ########################################
 # PARSER
@@ -196,14 +250,23 @@ class Parser:
 
     def parse(self):
         res = self.expr()
+        if not res.error and self.current_tok.type != EOF:
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.start_pos, self.current_tok.pos_end, 
+                "Expected '+', '-' , '*' , or '/'"
+                ))
         return res
     
     def factor(self):
+        res = ParseResult()
         tok = self.current_tok
 
         if tok.type in (INT, FLOAT):
-            self.advance()
-            return NumberNode(tok)
+            res.register(self.advance())
+            return res.success(NumberNode(tok))
+        
+        return res.failure(InvalidSyntaxError(tok.pos_start, tok.post_end, "Expected int or float"))
+    
         
 
     def term(self): # Cals self.factor and has MULTIPLY and DIVIDE operators
@@ -215,15 +278,19 @@ class Parser:
 
         # This basically takes a function, makes it run it's generic code with it's operator rules
     def binary_operation(self, func, ops):
-        left = func()
+        res = ParseResult()
+        left = res.register(func())
+        if res.error: return res
+
 
         while self.current_tok.type in ops:
             op_tok = self.current_tok
-            self.advance()
-            right = func()
+            res.register(self.advance())
+            right = res.register(func())
+            if res.error: return res
             left = BinaryOperatorNode(left, op_tok, right)
         
-        return left
+        return res.success(left)
 
 
 ##########
