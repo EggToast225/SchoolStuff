@@ -12,23 +12,20 @@
 # The token class specifies the type and value of the character
 
 class Token(object):
-    def __init__(self, type, value = None):
+    def __init__(self, type, value=None):
         self.type = type
         self.value = value
-    
-    def __str__(self):
-        return "Token({value}, {type})".format(
-            value = self.value,
-            type = repr(self.type)
-        )
-    
+
     def __repr__(self):
-        return self.__str__()
+        if self.value: return f'{self.type}:{self.value}'
+        return f'{self.type}'
 
 
 ############
 # Errors
 ############
+
+# The error class shows the position and type of error
 
 class Error:
     def __init__(self, pos_start, pos_end, error_name, details):
@@ -93,6 +90,8 @@ class Lexer(object):
         self.pos.advance(self.current_char)
         self.current_char = self.text[self.pos.idx] if self.pos.idx < len(self.text) else None
 
+
+    # Returns a list of tokens
     def make_tokens(self):
         tokens = []
 
@@ -129,36 +128,22 @@ class Lexer(object):
 
         return tokens, None # return tokens and no Errors
     
-
+    # Determines if the number_str is a float or Integer by the number of dots. 
     def make_numbers(self):
         num_str = ''
         dot_count = 0
 
-        while self.current_char is not None and (self.current_char.isdigit() or self.current_char == '.'):
+        while self.current_char != None and (self.current_char.isdigit() or self.current_char == '.'):
             if self.current_char == '.':
                 if dot_count == 1: break
                 dot_count += 1
             num_str += self.current_char
             self.advance()
 
-        if dot_count == 0: return Token(int(num_str), INT)
-        elif dot_count == 1: return Token(float(num_str),FLOAT)    
+        if dot_count == 0: return Token(INT, int(num_str) )
+        elif dot_count == 1: return Token(FLOAT, float(num_str))    
 
 
-
-
-
-
-
-##########
-# RUN
-##########
-
-def run(fn,text):
-    lexer  = Lexer(fn, text)
-    tokens, error = lexer.make_tokens()
-
-    return tokens, error
 
 
 ### Grammer
@@ -184,13 +169,16 @@ class NumberNode:
 
 class BinaryOperatorNode:
     def __init__(self, left_node, op_tok, right_node):
-        self.left = left_node
+        self.left_node = left_node
         self.op_tok = op_tok
         self.right_node = right_node
     
     def __repr__(self):
         return f'({self.left_node}, {self.op_tok}, {self.right_node})'
-    
+
+########################################
+# PARSER
+###################################
     
 class Parser:
     def __init__(self, tokens): # takes in a list of tokens
@@ -200,7 +188,7 @@ class Parser:
     
     def advance(self):
         self.tok_idx += 1
-        if self.tok_id < len(self.tokens):
+        if self.tok_idx < len(self.tokens):
             self.current_tok = self.tokens[self.tok_idx]
         return self.current_tok
     
@@ -212,6 +200,7 @@ class Parser:
     
     def factor(self):
         tok = self.current_tok
+
         if tok.type in (INT, FLOAT):
             self.advance()
             return NumberNode(tok)
@@ -228,7 +217,27 @@ class Parser:
     def binary_operation(self, func, ops):
         left = func()
 
-        while self.current_tok in ops:
+        while self.current_tok.type in ops:
             op_tok = self.current_tok
+            self.advance()
             right = func()
             left = BinaryOperatorNode(left, op_tok, right)
+        
+        return left
+
+
+##########
+# RUN
+##########
+
+def run(fn,text):
+    lexer  = Lexer(fn, text)
+    tokens, error = lexer.make_tokens()
+    if error: return None, error 
+
+
+    #Generate Abstract Syntax Tree
+    parser = Parser(tokens)
+    ast = parser.parse()
+
+    return ast, None
