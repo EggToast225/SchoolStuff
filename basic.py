@@ -25,12 +25,12 @@ class Token(object):
         self.type = type
         self.value = value
 
-        if pos_start:
+        if pos_start: # If there's start position, assign the end and the start as the copy
             self.pos_start = pos_start.copy()
             self.pos_end = pos_start.copy()
             self.pos_end.advance()
 
-        if pos_end:
+        if pos_end: # If there's a end position provided, make start and end the given end position
             self.pos_end = pos_end.copy() 
             self.pos_start = pos_end.copy()
 
@@ -48,7 +48,7 @@ class Token(object):
 class Error:
     def __init__(self, pos_start, pos_end, error_name, details):
         self.pos_start = pos_start
-        self.pod_end = pos_end
+        self.pos_end = pos_end
         self.error_name = error_name
         self.details = details
     
@@ -77,9 +77,9 @@ class Position:
         self.ln = ln
         self.col = col
         self.file_name  = file_name
-        self.file_text = file_txt
+        self.file_txt = file_txt
     
-    def advance(self, current_char): # keeps track of index and column
+    def advance(self, current_char = None): # keeps track of index and column
         self.idx += 1
         self.col += 1
 
@@ -90,7 +90,7 @@ class Position:
         return self
     
     def copy(self):
-        return Position(self.idx, self.ln, self.col, self.file_name, self.file_text)
+        return Position(self.idx, self.ln, self.col, self.file_name, self.file_txt)
     
 
 
@@ -150,7 +150,7 @@ class Lexer(object):
                 self.advance()
                 return [], IllegalCharError(pos_start, self.pos, "'" + char + "'" ) # returns an empty list and error
             
-        tokens.append(Token(EOF), pos_start=self.pos)
+        tokens.append(Token(EOF, pos_start=self.pos))
         return tokens, None # return tokens and no Errors
     
     # Determines if the number_str is a float or Integer by the number of dots. 
@@ -179,6 +179,9 @@ expr    : term ((PLUS|MINUS) term)*
 term    : factor ((MUL|DIV) factor)*
 
 factor  : INT:FLOAT
+        : (PLUS|MINUS) factor
+        : LPARAN expr RPARAN
+
 
 '''
 
@@ -201,6 +204,16 @@ class BinaryOperatorNode:
     
     def __repr__(self):
         return f'({self.left_node}, {self.op_tok}, {self.right_node})'
+
+class UnaryOpNode:
+    def __init__(self, op_tok, node):
+        self.op_tok = op_tok
+        self.node = node
+
+    def __repr__(self):
+        return f'({self.op_tok}, {self.node})'
+
+
     
 
 ########################################
@@ -214,7 +227,8 @@ class ParseResult: # Class keeps track of Parse results and Nodes
     
     def register(self, res):
         if isinstance(res, ParseResult): #Tracks errors if there is an error
-            if res.error: self.error = res.error
+            if res.error: 
+                self.error = res.error
             return res.node
     
         return res
@@ -250,9 +264,9 @@ class Parser:
 
     def parse(self):
         res = self.expr()
-        if not res.error and self.current_tok.type != EOF:
+        if not res.error and self.current_tok.type != EOF: # If current_tok type isn't EOF, that means there's been a syntax error
             return res.failure(InvalidSyntaxError(
-                self.current_tok.start_pos, self.current_tok.pos_end, 
+                self.current_tok.pos_start, self.current_tok.pos_end, 
                 "Expected '+', '-' , '*' , or '/'"
                 ))
         return res
@@ -261,11 +275,36 @@ class Parser:
         res = ParseResult()
         tok = self.current_tok
 
-        if tok.type in (INT, FLOAT):
+        if tok.type in (ADD, SUBTRACT): # Unary 
+            res.register(self.advance())
+            factor = res.register(self.factor())
+            if res.error:
+                return res
+            return res.success(UnaryOpNode(tok, factor))
+        
+        elif tok.type in (INT, FLOAT):    # Integers
             res.register(self.advance())
             return res.success(NumberNode(tok))
+
+        elif tok.type == LPARAN:
+            res.register(self.advance())
+            expr = res.register(self.expr())
+            if res.error:
+                return res
+            if self.current_tok.type == RPARAN:
+                res.register(self.advance())
+                return res.success(expr)
+            else:
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end,
+                    "Expected ')'"
+                ))
+
         
-        return res.failure(InvalidSyntaxError(tok.pos_start, tok.post_end, "Expected int or float"))
+        return res.failure(InvalidSyntaxError(
+            tok.pos_start, tok.pos_end, 
+            "Expected int or float"
+            ))
     
         
 
@@ -280,18 +319,84 @@ class Parser:
     def binary_operation(self, func, ops):
         res = ParseResult()
         left = res.register(func())
-        if res.error: return res
+        if res.error: 
+            return res
 
 
         while self.current_tok.type in ops:
             op_tok = self.current_tok
             res.register(self.advance())
             right = res.register(func())
-            if res.error: return res
+            if res.error:
+                return res
             left = BinaryOperatorNode(left, op_tok, right)
         
         return res.success(left)
+    
+#######################
+#   VALUES
+####################
 
+class Number:
+    def __init__(self,value):
+        self.value = value
+        self.set_pos()
+
+    def set_pos(self, pos_start = None, pos_end = None):
+        self.pos_start = pos_start
+        self.pos_end = pos_end
+        return self
+
+    def added_to(self, other):
+        if isinstance(other, Number):
+            return Number(self.value + other.value)
+    
+    def subbed_by(self, other):
+        if isinstance(other, Number):
+            return Number(self.value - other.value) 
+        
+    def multiply_by(self, other):
+        if isinstance(other, Number):
+            return Number(self.value * other.value)
+        
+    def divide_by(self, other):
+        if isinstance(other, Number):
+            return Number(self.value / other.value)
+    
+    def __repr__(self):
+        return str(self.value)
+        
+#################
+#   Interpreter
+###################
+
+class Interpreter:
+    def visit(self, node):
+        method_name = f'visit_{type(node).__name__}' # method name is set as the type of name]
+        method = getattr(self, method_name, self.no_visit_method)
+        return method(node)
+
+    def no_visit_method(self,node):
+        raise Exception(f'No visit_{type(node).__name__} method defined')
+    
+    def visit_NumberNode(self,node):
+        return Number(node.tok.value).set_pos(node.pos_start, node.pos_end)
+
+    def visit_BinaryOperatorNode(self,node):
+        # after finding binary operator, needs to find left number node and right number node
+        left = self.visit(node.left_node)
+        right = self.visit(node.right_node)
+
+        if node.op_tok.value == ADD:
+            result = left.added_to(right)
+
+    def visit_UnaryOpNode(self,node):
+        print("Found Unary op node!")
+        self.visit(node.node) # finds child node
+        
+
+        #visit NumberNode
+        #visit UnaryNode
 
 ##########
 # RUN
@@ -306,5 +411,10 @@ def run(fn,text):
     #Generate Abstract Syntax Tree
     parser = Parser(tokens)
     ast = parser.parse()
+    if ast.error: return None, ast.error
 
-    return ast, None
+    # Run Program
+    interpreter = Interpreter()
+    interpreter.visit(ast.node)
+
+    return None, None
