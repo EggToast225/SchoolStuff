@@ -5,9 +5,6 @@
 from strings_with_arrows import * 
 
 
-# Rewritten Interpreter
-
-
 
 #Initialize Types and Characters
 # These are End of Files (EOF), ADD, SUBTRACT, MULTIPLY, DIVIDE, FLOAT, INT
@@ -18,14 +15,22 @@ from strings_with_arrows import *
 # TOKEN CLASS #
 ###############
 
-# The token class specifies the type and value of the character
+'''
+The token class specifies the type and value of the character
+class Token(object):
+    self.type = type    # token type
+    self.value = value  # value of token
+
+    self.pos_start = None   # Entry for Position class optional, if there is, the position class of the Token is copied
+    self.pos_end = None     # Entry for Position class optional, if there is, the position class of the Token is copied and advanced
+'''
 
 class Token(object):
     def __init__(self, type, value=None, pos_start = None, pos_end = None):
         self.type = type
         self.value = value
 
-        if pos_start: # If there's start position, assign the end and the start as the copy
+        if pos_start: # If there's start position, assign the start as the current position and the end the advance() of the current position
             self.pos_start = pos_start.copy()
             self.pos_end = pos_start.copy()
             self.pos_end.advance()
@@ -57,6 +62,10 @@ class Error:
         result += f'File {self.pos_start.file_name}, line {self.pos_start.ln}'
         result += '\n\n' + string_with_arrows(self.pos_start.file_txt, self.pos_start, self.pos_end)
         return result
+
+
+# Error Types
+
 
 class IllegalCharError(Error):
     def __init__(self, pos_start, pos_end, details):
@@ -115,7 +124,7 @@ class Lexer(object):
         self.current_char = self.text[self.pos.idx] if self.pos.idx < len(self.text) else None
 
 
-    # Returns a list of tokens
+    # Returns a list of tokens depending on current char in text
     def make_tokens(self):
         tokens = []
 
@@ -247,12 +256,14 @@ class ParseResult: # Class keeps track of Parse results and Nodes
 ########################################
 # PARSER
 ###################################
+
+# Takes in a list of tokens and evaluates grammer 
     
 class Parser:
     def __init__(self, tokens): # takes in a list of tokens
         self.tokens = tokens
         self.tok_idx = -1
-        self.advance()
+        self.advance() # when intialized, tok_idx = 0;
     
     def advance(self):
         self.tok_idx += 1
