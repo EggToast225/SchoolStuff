@@ -4,7 +4,7 @@ def string_with_arrows(text, pos_start, pos_end):
       # Calculate indices
     idx_start = max(text.rfind('\n', 0, pos_start.idx), 0) # the index start is the max of 
                                                             #(the last occurance of \n's position from 0 scanned index positionsor 0)
-    idx_end = text.find('\n', idx_start + 1)            # find \n wihtin range of idx_start + 1; if not, return -1
+    idx_end = text.find('\n', idx_start + 1)            # find \n within range of idx_start + 1; if not, return -1
     if idx_end < 0: 
         idx_end = len(text)
     

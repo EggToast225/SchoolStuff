@@ -58,8 +58,8 @@ class Error:
         self.details = details
     
     def as_string(self):
-        result = f'{self.error_name}: {self.details} '
-        result += f'File {self.pos_start.file_name}, line {self.pos_start.ln}'
+        result = f'{self.error_name}: {self.details}\n'
+        result += f'File {self.pos_start.file_name}, line {self.pos_start.ln + 1}'
         result += '\n\n' + string_with_arrows(self.pos_start.file_txt, self.pos_start, self.pos_end)
         return result
 
@@ -72,9 +72,35 @@ class IllegalCharError(Error):
         super().__init__(pos_start, pos_end, "Illegal Character", details)
 
 class InvalidSyntaxError(Error):
-    def __init__(self, pos_start, pos_end, details):
+    def __init__(self, pos_start, pos_end, details=''):
         super().__init__(pos_start, pos_end, "Invalid Syntax", details)
 
+class RunTimeError(Error):
+    def __init__(self, pos_start, pos_end, details=''):
+        super().__init__(pos_start, pos_end, "Runtime Error", details)
+
+
+######################
+# RUNTIME RESULT
+######################
+
+class RTEResult:
+    def __init__(self):
+        self.value = None
+        self.error = None
+
+    def register(self, res):
+        if res.error: 
+            self.error = res.error
+        return res.value
+    
+    def success(self, value):
+        self.value = value
+        return self
+    
+    def failure(self, error):
+        self.error = error
+        return self
 
 ########################
 # POSITION
@@ -202,6 +228,9 @@ class NumberNode:
     def __init__(self,tok):
         self.tok = tok
 
+        self.pos_start = self.tok.pos_start
+        self.pos_end = self.tok.pos_end
+
     def __repr__(self):
         return f'{self.tok}'
 
@@ -210,6 +239,9 @@ class BinaryOperatorNode:
         self.left_node = left_node
         self.op_tok = op_tok
         self.right_node = right_node
+
+        self.pos_start = self.left_node.pos_start
+        self.pos_end = self.right_node.pos_end
     
     def __repr__(self):
         return f'({self.left_node}, {self.op_tok}, {self.right_node})'
@@ -218,6 +250,9 @@ class UnaryOpNode:
     def __init__(self, op_tok, node):
         self.op_tok = op_tok
         self.node = node
+
+        self.pos_start = self.op_tok.pos_start
+        self.pos_end = node.pos_end
 
     def __repr__(self):
         return f'({self.op_tok}, {self.node})'
@@ -352,6 +387,7 @@ class Number:
     def __init__(self,value):
         self.value = value
         self.set_pos()
+    
 
     def set_pos(self, pos_start = None, pos_end = None):
         self.pos_start = pos_start
@@ -360,19 +396,21 @@ class Number:
 
     def added_to(self, other):
         if isinstance(other, Number):
-            return Number(self.value + other.value)
+            return Number(self.value + other.value), None
     
     def subbed_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value - other.value) 
+            return Number(self.value - other.value), None
         
     def multiply_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value * other.value)
+            return Number(self.value * other.value), None
         
     def divide_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value / other.value)
+            if other.value == 0:
+                return None, RunTimeError(other.pos_start, other.pos_end, "Divison by zero")
+            return Number(self.value / other.value), None
     
     def __repr__(self):
         return str(self.value)
@@ -391,23 +429,57 @@ class Interpreter:
         raise Exception(f'No visit_{type(node).__name__} method defined')
     
     def visit_NumberNode(self,node):
-        return Number(node.tok.value).set_pos(node.pos_start, node.pos_end)
+        return RTEResult().success(
+            Number(node.tok.value).set_pos(node.pos_start, node.pos_end))
 
     def visit_BinaryOperatorNode(self,node):
         # after finding binary operator, needs to find left number node and right number node
-        left = self.visit(node.left_node)
-        right = self.visit(node.right_node)
+        res = RTEResult()
 
-        if node.op_tok.value == ADD:
-            result = left.added_to(right)
+        left = res.register(self.visit(node.left_node)) # get left node
+        if res.error:
+            return res
+        
+        right = res.register(self.visit(node.right_node)) # get right node
+        if res.error:
+            return res
+        
+        #Check binary node
 
-    def visit_UnaryOpNode(self,node):
-        print("Found Unary op node!")
-        self.visit(node.node) # finds child node
+        if node.op_tok.type == ADD:
+            result, error = left.added_to(right)
+
+        elif node.op_tok.type == SUBTRACT:
+            result, error = left.subbed_by(right)
+
+        elif node.op_tok.type == MULTIPLY:
+            result, error = left.multiply_by(right)
+
+        elif node.op_tok.type == DIVIDE:
+            result, error = left.divide_by(right)
         
 
-        #visit NumberNode
-        #visit UnaryNode
+        if error:
+            return res.failure(error)
+        else:
+            return res.success(result.set_pos(node.pos_start, node.pos_end))
+
+
+    def visit_UnaryOpNode(self,node):
+        res = RTEResult()
+        number = res.register(self.visit(node.node))
+        if res.error: return res
+
+        error = None
+
+        if node.op_tok.type == SUBTRACT:
+            number, error = number.multiply_by(Number(-1))
+        
+        if error:
+            return res.failure(error)
+        else:
+            return res.success(number.set_pos(node.pos_start, node.pos_end))
+        
 
 ##########
 # RUN
@@ -426,6 +498,7 @@ def run(fn,text):
 
     # Run Program
     interpreter = Interpreter()
-    interpreter.visit(ast.node)
+    result = interpreter.visit(ast.node)
+    
 
-    return None, None
+    return result.value, result.error
