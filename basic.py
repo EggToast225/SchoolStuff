@@ -76,8 +76,28 @@ class InvalidSyntaxError(Error):
         super().__init__(pos_start, pos_end, "Invalid Syntax", details)
 
 class RunTimeError(Error):
-    def __init__(self, pos_start, pos_end, details=''):
+    def __init__(self, pos_start, pos_end, details, context):
         super().__init__(pos_start, pos_end, "Runtime Error", details)
+        self.context = context
+
+    def as_string(self):
+        result = self.generate_traceback()
+        result += f'File {self.pos_start.file_name}, line {self.pos_start.ln + 1}'
+        result += '\n\n' + string_with_arrows(self.pos_start.file_txt, self.pos_start, self.pos_end)
+        
+        return result
+
+    def generate_traceback(self):
+        result =''
+        pos = self.pos_start
+        ctx = self.context
+
+        while ctx:
+            result = f' File {pos.file_name}, line {str(pos.ln + 1)}, in {ctx.display_name}\n' + result
+            pos = ctx.parent_entry_pos
+            ctx = ctx.parent
+        
+        return "Traceback (most recent call last):\n" + result
 
 
 ######################
@@ -101,6 +121,17 @@ class RTEResult:
     def failure(self, error):
         self.error = error
         return self
+    
+######################
+#  CONTEXT
+#########################
+
+class Context: # holds current context to hold functions 
+    def __init__(self, display_name, parent=None, parent_entry_pos=None):
+        self.display_name = display_name
+        self.parent = parent
+        self.parent_entry_pos = parent_entry_pos
+
 
 ########################
 # POSITION
@@ -387,30 +418,36 @@ class Number:
     def __init__(self,value):
         self.value = value
         self.set_pos()
-    
+        self.set_context()
 
     def set_pos(self, pos_start = None, pos_end = None):
         self.pos_start = pos_start
         self.pos_end = pos_end
         return self
+    
+    def set_context(self,context =None):
+        self.context = context
+        return self
 
     def added_to(self, other):
         if isinstance(other, Number):
-            return Number(self.value + other.value), None
+            return Number(self.value + other.value).set_context(self.context), None
     
     def subbed_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value - other.value), None
+            return Number(self.value - other.value).set_context(self.context), None
         
     def multiply_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value * other.value), None
+            return Number(self.value * other.value).set_context(self.context), None
         
     def divide_by(self, other):
         if isinstance(other, Number):
             if other.value == 0:
-                return None, RunTimeError(other.pos_start, other.pos_end, "Divison by zero")
-            return Number(self.value / other.value), None
+                return None, RunTimeError(other.pos_start, 
+                other.pos_end, "Divison by zero",
+                self.context)
+            return Number(self.value / other.value).set_context(self.context), None
     
     def __repr__(self):
         return str(self.value)
@@ -420,27 +457,27 @@ class Number:
 ###################
 
 class Interpreter:
-    def visit(self, node):
+    def visit(self, node, context):
         method_name = f'visit_{type(node).__name__}' # method name is set as the type of name]
         method = getattr(self, method_name, self.no_visit_method)
-        return method(node)
+        return method(node, context)
 
-    def no_visit_method(self,node):
+    def no_visit_method(self,node, context):
         raise Exception(f'No visit_{type(node).__name__} method defined')
     
-    def visit_NumberNode(self,node):
+    def visit_NumberNode(self,node, context):
         return RTEResult().success(
-            Number(node.tok.value).set_pos(node.pos_start, node.pos_end))
+            Number(node.tok.value).set_context(context).set_pos(node.pos_start, node.pos_end))
 
-    def visit_BinaryOperatorNode(self,node):
+    def visit_BinaryOperatorNode(self,node, context):
         # after finding binary operator, needs to find left number node and right number node
         res = RTEResult()
 
-        left = res.register(self.visit(node.left_node)) # get left node
+        left = res.register(self.visit(node.left_node, context)) # get left node
         if res.error:
             return res
         
-        right = res.register(self.visit(node.right_node)) # get right node
+        right = res.register(self.visit(node.right_node, context)) # get right node
         if res.error:
             return res
         
@@ -465,7 +502,7 @@ class Interpreter:
             return res.success(result.set_pos(node.pos_start, node.pos_end))
 
 
-    def visit_UnaryOpNode(self,node):
+    def visit_UnaryOpNode(self,node, context):
         res = RTEResult()
         number = res.register(self.visit(node.node))
         if res.error: return res
@@ -498,7 +535,8 @@ def run(fn,text):
 
     # Run Program
     interpreter = Interpreter()
-    result = interpreter.visit(ast.node)
+    context = Context("<program>", )
+    result = interpreter.visit(ast.node, context)
     
 
     return result.value, result.error
