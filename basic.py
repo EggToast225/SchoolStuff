@@ -4,12 +4,36 @@
 
 from strings_with_arrows import * 
 
+import string
+
 
 
 #Initialize Types and Characters
 # These are End of Files (EOF), ADD, SUBTRACT, MULTIPLY, DIVIDE, FLOAT, INT
 
+DIGITS = '0123456789'
+LETTERS = string.ascii_letters
+LETTERS_DIGITS = LETTERS + '0123456789'
+
+
+###############
+#   TOKENS
+###############
+
+# Algebraic
 (EOF, ADD, SUBTRACT, MULTIPLY, DIVIDE, FLOAT, INT, LPARAN, RPARAN, POWER) = 'EOF', 'ADD', 'SUBSTRACT', 'MULTIPLY', 'DIVIDE', 'FLOAT', 'INT', 'LPARAN', 'RPARAN', "POWER"
+
+#Variables
+(TT_IDENTIFIER, TT_KEYWORD, TT_EQ) ='IDENTIFIER', 'KEYWORD', 'EQ'
+'''
+    VAR          variable_name       =  <expr>
+    ^                ^               ^           
+  KEYWORD        IDENTIFIER        EQUALS
+'''
+
+KEYWORDS = [
+    'VAR'
+]
 
 ###############
 # TOKEN CLASS #
@@ -188,8 +212,11 @@ class Lexer(object):
         while self.current_char != None:
             if self.current_char in ' \t': # If the current character is a space or tab, just skip it
                 self.advance()
-            elif self.current_char.isdigit():
+            elif self.current_char in DIGITS:
                 tokens.append(self.make_numbers())
+            elif self.current_char in LETTERS:
+                tokens.append(self.make_id())
+                self.advance()
             elif self.current_char == '+':
                 tokens.append(Token(ADD, pos_start = self.pos))
                 self.advance()
@@ -211,6 +238,10 @@ class Lexer(object):
             elif self.current_char == '^':
                 tokens.append(Token(POWER, pos_start = self.pos))
                 self.advance()
+            elif self.current_char == '=':
+                tokens.append(Token(TT_EQ, pos_start = self.pos))
+                self.advance()
+
 
             # case of an unrecognized character
             else:
@@ -228,7 +259,7 @@ class Lexer(object):
         dot_count = 0
         pos_start = self.pos.copy()
 
-        while self.current_char != None and (self.current_char.isdigit() or self.current_char == '.'):
+        while self.current_char != None and (self.current_char in DIGITS or self.current_char == '.'):
             if self.current_char == '.':
                 if dot_count == 1: break
                 dot_count += 1
@@ -237,14 +268,28 @@ class Lexer(object):
 
         if dot_count == 0: return Token(INT, int(num_str), pos_start, self.pos)
         elif dot_count == 1: return Token(FLOAT, float(num_str), pos_start, self.pos)    
+    
+    # Makes identifier
+    def make_id(self):
+        id_str = ''
+        pos_start = self.pos.copy()
 
-
-
+        while self.current_chat != None and (self.current_char in LETTERS_DIGITS + '_'):
+            id_str += self.current_char
+            self.advance()
+        
+        if id_str in KEYWORDS:
+            tok_type = TT_KEYWORD
+        else:
+            tok_type == TT_IDENTIFIER
+        
+        return Token(tok_type, id_str, pos_start, self.pos)
 
 ### Grammer
 '''
 
-expr    : term ((PLUS|MINUS) term)*
+expr    : KEYWORD:VAR IDENTIFIER EQ expr
+        : term ((PLUS|MINUS) term)*
 
 term    : factor ((MUL|DIV) factor)*
 
@@ -296,6 +341,25 @@ class UnaryOpNode:
     def __repr__(self):
         return f'({self.op_tok}, {self.node})'
 
+
+# VARIABLES
+class VarAccessNode:
+    def __init__(self, var_name_tok):
+        self.var_name_tok = var_name_tok
+
+        self.pos_start = self.var_name_tok.pos_start
+        self.pos_end = self.var_name_tok.pos_end
+
+class VarAssignNode:
+    def __init__(self,var_name_tok, value_node):
+        self.var_name = var_name_tok
+        self.expr = value_node
+    
+        self.pos_start = self.var_name.pos_start
+        self.pos_end = value_node.pos_end
+    
+    def __repr__(self):
+        return f'{self.var_name} = {self.expr}'
 
 
 ########################################
@@ -363,6 +427,11 @@ class Parser:
             res.register(self.advance())
             return res.success(NumberNode(tok))
         
+        elif tok.type == TT_IDENTIFIER:
+            res.register(self.advance())
+            res.success(VarAccessNode(tok))
+
+        # Parenthesis case handling
         elif tok.type == LPARAN: # Left parenthesis
             res.register(self.advance())
             expr = res.register(self.expr())
@@ -399,8 +468,34 @@ class Parser:
     def term(self): # Calls self.factor and has MULTIPLY and DIVIDE operators
         return self.binary_operation(self.factor, (MULTIPLY, DIVIDE))
 
-    def expr(self): # calls self.term and has ADD, SUB operators
-        return self.binary_operation(self.power, (ADD, SUBTRACT))
+    def expr(self): # calls self.term and has ADD, SUB operators; also has variables identifier
+        res = ParseResult()
+        tok = self.current_tok
+        
+        if tok.type == KEYWORDS and tok.value == 'VAR': # Check to see if the token type is a keyword and is a variable
+            res.register(self.advance())
+            
+            if tok.type != TT_IDENTIFIER: # in the case that the next token is not an identifier, return an error
+                return res.failure (InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end, "Expected Identifier"
+                ))
+            # if it checks out, the variable_name is the token
+            var_name = tok
+            # we advance to the next position of tokens, which should be a TT_EQ
+            res.register(self.advance())
+
+            if tok.type != TT_EQ:
+                return res.faileure(InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end, "Expected Assignment"
+                ))
+            res.register(self.advance())
+
+            # After this, we look for an expression
+            expr = res.register(self.expr())
+            if res.error(): return res
+            return res.success(VarAssignNode(var_name, expr))
+
+        return self.binary_operation(self.term, (ADD, SUBTRACT))
 
     def power(self):
         return self.binary_operation(self.atom, (POWER, ), self.factor)
