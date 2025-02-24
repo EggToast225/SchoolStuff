@@ -9,7 +9,7 @@ from strings_with_arrows import *
 #Initialize Types and Characters
 # These are End of Files (EOF), ADD, SUBTRACT, MULTIPLY, DIVIDE, FLOAT, INT
 
-(EOF, ADD, SUBTRACT, MULTIPLY, DIVIDE, FLOAT, INT, LPARAN, RPARAN) = 'EOF', 'ADD', 'SUBSTRACT', 'MULTIPLY', 'DIVIDE', 'FLOAT', 'INT', 'LPARAN', 'RPARAN'
+(EOF, ADD, SUBTRACT, MULTIPLY, DIVIDE, FLOAT, INT, LPARAN, RPARAN, POWER) = 'EOF', 'ADD', 'SUBSTRACT', 'MULTIPLY', 'DIVIDE', 'FLOAT', 'INT', 'LPARAN', 'RPARAN', "POWER"
 
 ###############
 # TOKEN CLASS #
@@ -208,6 +208,9 @@ class Lexer(object):
             elif self.current_char == ')':
                 tokens.append(Token(RPARAN, pos_start = self.pos))
                 self.advance()
+            elif self.current_char == '^':
+                tokens.append(Token(POWER, pos_start = self.pos))
+                self.advance()
 
             # case of an unrecognized character
             else:
@@ -240,13 +243,18 @@ class Lexer(object):
 
 ### Grammer
 '''
+
 expr    : term ((PLUS|MINUS) term)*
 
 term    : factor ((MUL|DIV) factor)*
 
-factor  : INT:FLOAT
-        : (PLUS|MINUS) factor
-        : LPARAN expr RPARAN
+factor  : (PLUS|MINUS) factor
+        : power
+
+power   : atom (POWER factor)*
+
+atom    : INT | FLOAT
+        : LPAREN expr RPAREN
 
 
 '''
@@ -289,7 +297,6 @@ class UnaryOpNode:
         return f'({self.op_tok}, {self.node})'
 
 
-    
 
 ########################################
 # PARSE RESULT
@@ -344,9 +351,37 @@ class Parser:
         if not res.error and self.current_tok.type != EOF: # If current_tok type isn't EOF, that means there's been a syntax error
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end, 
-                "Expected '+', '-' , '*' , or '/'"
+                "Expected '+', '-' , '*' , '^', or '/'"
                 ))
         return res
+    
+    def atom(self):
+        res = ParseResult()
+        tok = self.current_tok
+        
+        if tok.type in (INT, FLOAT):    # Integers
+            res.register(self.advance())
+            return res.success(NumberNode(tok))
+        
+        elif tok.type == LPARAN: # Left parenthesis
+            res.register(self.advance())
+            expr = res.register(self.expr())
+            if res.error:
+                return res
+
+            if self.current_tok.type == RPARAN: # Right parenthesis
+                res.register(self.advance())
+                return res.success(expr)
+            else:
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end,
+                    "Expected ')'"
+                ))
+            
+        return res.failure(InvalidSyntaxError(
+            tok.pos_start, tok.pos_end, 
+            "Expected int or float, '+',  '-', or '(' )"
+            ))
     
     def factor(self):
         res = ParseResult()
@@ -359,41 +394,23 @@ class Parser:
                 return res
             return res.success(UnaryOpNode(tok, factor))
         
-        elif tok.type in (INT, FLOAT):    # Integers
-            res.register(self.advance())
-            return res.success(NumberNode(tok))
-
-        elif tok.type == LPARAN:
-            res.register(self.advance())
-            expr = res.register(self.expr())
-            if res.error:
-                return res
-            if self.current_tok.type == RPARAN:
-                res.register(self.advance())
-                return res.success(expr)
-            else:
-                return res.failure(InvalidSyntaxError(
-                    self.current_tok.pos_start, self.current_tok.pos_end,
-                    "Expected ')'"
-                ))
-
-        
-        return res.failure(InvalidSyntaxError(
-            tok.pos_start, tok.pos_end, 
-            "Expected int or float"
-            ))
+        return self.power()
     
-        
-
-    def term(self): # Cals self.factor and has MULTIPLY and DIVIDE operators
+    def term(self): # Calls self.factor and has MULTIPLY and DIVIDE operators
         return self.binary_operation(self.factor, (MULTIPLY, DIVIDE))
 
     def expr(self): # calls self.term and has ADD, SUB operators
-        return self.binary_operation(self.term, (ADD, SUBTRACT))
+        return self.binary_operation(self.power, (ADD, SUBTRACT))
+
+    def power(self):
+        return self.binary_operation(self.atom, (POWER, ), self.factor)
 
 
         # This basically takes a function, makes it run it's generic code with it's operator rules
-    def binary_operation(self, func, ops):
+    def binary_operation(self, func, ops, func_b =None):
+        if func_b == None:
+            func_b = func
+
         res = ParseResult()
         left = res.register(func())
         if res.error: 
@@ -403,7 +420,7 @@ class Parser:
         while self.current_tok.type in ops:
             op_tok = self.current_tok
             res.register(self.advance())
-            right = res.register(func())
+            right = res.register(func_b())
             if res.error:
                 return res
             left = BinaryOperatorNode(left, op_tok, right)
@@ -448,6 +465,10 @@ class Number:
                 other.pos_end, "Divison by zero",
                 self.context)
             return Number(self.value / other.value).set_context(self.context), None
+
+    def power_by(self,other):
+        if isinstance(other,Number):
+            return Number(self.value ** other.value).set_context(self.context), None
     
     def __repr__(self):
         return str(self.value)
@@ -495,6 +516,9 @@ class Interpreter:
         elif node.op_tok.type == DIVIDE:
             result, error = left.divide_by(right)
         
+        elif node.op_tok.type == POWER:
+            result, error = left.power_by(right)
+        
 
         if error:
             return res.failure(error)
@@ -504,7 +528,7 @@ class Interpreter:
 
     def visit_UnaryOpNode(self,node, context):
         res = RTEResult()
-        number = res.register(self.visit(node.node))
+        number = res.register(self.visit(node.node, context))
         if res.error: return res
 
         error = None
