@@ -1,0 +1,85 @@
+from Position import Position
+from Token import *
+from Errors import IllegalCharError
+#############
+#   LEXER   # 
+#############
+
+# The lexer just goes through the string and creates tokens 
+
+class Lexer(object):
+    def __init__(self, fn, text):
+        self.fn = fn
+        self.text = text
+        self.pos = Position(-1,0,-1, fn, text) # position is set to index -1, line 0, column -1
+        self.current_char = self.text[self.pos.idx]
+        self.advance() # this makes self.pos = 0 when it's initialized
+
+
+    
+    def advance(self):  # increment pos and reassigns current char  if the position index is less than length of text
+        self.pos.advance(self.current_char)
+        self.current_char = self.text[self.pos.idx] if self.pos.idx < len(self.text) else None
+
+
+    # Returns a list of tokens depending on current char in text
+    def make_tokens(self):
+        tokens = []
+
+        single_char_tokens = {
+        '+': ADD, '-': SUBTRACT, '/': DIVIDE, '*': MULTIPLY,
+        '(': LPARAN, ')': RPARAN, '^': POWER, '=': TT_EQ
+        }
+
+        while self.current_char != None:
+            if self.current_char in ' \t': # If the current character is a space or tab, just skip it
+                self.advance()
+            elif self.current_char in DIGITS:
+                tokens.append(self.make_numbers())
+            elif self.current_char in LETTERS:
+                tokens.append(self.make_id())
+                self.advance()
+            elif self.current_char in single_char_tokens:
+                tokens.append(Token(single_char_tokens[self.current_char],pos_start=self.pos,pos_end=self.pos))
+                self.advance()
+            # case of an unrecognized character
+            else:
+                pos_start = self.pos.copy()
+                char = self.current_char
+                self.advance()
+                return [], IllegalCharError(pos_start, self.pos, "'" + char + "'" ) # returns an empty list and error
+            
+        tokens.append(Token(EOF, pos_start=self.pos))
+        return tokens, None # return tokens and no Errors
+    
+    # Determines if the number_str is a float or Integer by the number of dots. 
+    def make_numbers(self):
+        num_str = ''
+        dot_count = 0
+        pos_start = self.pos.copy()
+
+        while self.current_char != None and (self.current_char in DIGITS or self.current_char == '.'):
+            if self.current_char == '.':
+                if dot_count == 1: break
+                dot_count += 1
+            num_str += self.current_char
+            self.advance()
+
+        if dot_count == 0: return Token(INT, int(num_str), pos_start, self.pos)
+        elif dot_count == 1: return Token(FLOAT, float(num_str), pos_start, self.pos)
+    
+    # Makes identifier
+    def make_id(self):
+        id_str = ''
+        pos_start = self.pos.copy()
+
+        while self.current_char != None and (self.current_char in LETTERS_DIGITS + '_'):
+            id_str += self.current_char
+            self.advance()
+        
+        if id_str in KEYWORDS:
+            tok_type = TT_KEYWORD
+        else:
+            tok_type == TT_IDENTIFIER
+        
+        return Token(tok_type, id_str, pos_start, self.pos)

@@ -1,0 +1,66 @@
+###############
+#   IMPORTS
+###############
+import string
+
+#Initialize Types and Characters
+# These are End of Files (EOF), ADD, SUBTRACT, MULTIPLY, DIVIDE, FLOAT, INT
+
+DIGITS = '0123456789'
+LETTERS = string.ascii_letters
+LETTERS_DIGITS = LETTERS + '0123456789'
+
+
+###############
+#   TOKENS
+###############
+
+# Algebraic
+ADD, SUBTRACT, MULTIPLY, DIVIDE,  = 'ADD', 'SUBSTRACT', 'MULTIPLY', 'DIVIDE'
+EOF, FLOAT, INT, POWER= 'EOF', 'FLOAT', 'INT', "POWER"
+LPARAN, RPARAN ='LPARAN', 'RPARAN'
+
+#Variables
+(TT_IDENTIFIER, TT_KEYWORD, TT_EQ) ='IDENTIFIER', 'KEYWORD', 'EQ'
+'''
+    VAR          variable_name       =  <expr>
+    ^                ^               ^
+    KEYWORD      IDENTIFIER        EQUALS
+'''
+
+KEYWORDS = [
+    'VAR'
+]
+
+###############
+# TOKEN CLASS #
+###############
+
+'''
+The token class specifies the type and value of the character
+class Token(object):
+    self.type = type    # token type
+    self.value = value  # value of token
+
+    self.pos_start = None   # Entry for Position class optional, if there is, the position class of the Token is copied
+    self.pos_end = None     # Entry for Position class optional, if there is, the position class of the Token is copied and advanced
+'''
+
+class Token(object):
+    def __init__(self, type, value=None, pos_start = None, pos_end = None):
+        self.type = type
+        self.value = value
+
+        if pos_start: # If there's start position, assign the start as the current position and the end the advance() of the current position
+            self.pos_start = pos_start.copy()
+            self.pos_end = pos_start.copy()
+            self.pos_end.advance()
+
+        if pos_end: # If there's a end position provided, make start and end the given end position
+            self.pos_end = pos_end.copy() 
+            self.pos_start = pos_end.copy()
+
+    def __repr__(self):
+        if self.value: return f'{self.type}:{self.value}'
+        return f'{self.type}'
+
