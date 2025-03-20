@@ -16,21 +16,29 @@ LETTERS_DIGITS = LETTERS + '0123456789'
 ###############
 
 # Algebraic
-ADD, SUBTRACT, MULTIPLY, DIVIDE,  = 'ADD', 'SUBSTRACT', 'MULTIPLY', 'DIVIDE'
-EOF, FLOAT, INT, POWER= 'EOF', 'FLOAT', 'INT', "POWER"
-LPARAN, RPARAN ='LPARAN', 'RPARAN'
+TT_ADD          = 'ADD'
+TT_SUBTRACT     = 'SUBTRACT'
+TT_MULTIPLY     = 'MULTIPLY'
+TT_DIVIDE       = 'DIVIDE'
+TT_EOF          = 'EOF'
+TT_FLOAT        = 'FLOAT'
+TT_INT          = 'INT'
+TT_POWER        = 'POWER'
+TT_LPAREN       = 'LPAREN'
+TT_RPAREN       = 'RPAREN'
 
 #Variables
-(TT_IDENTIFIER, TT_KEYWORD, TT_EQ) ='IDENTIFIER', 'KEYWORD', 'EQ'
+TT_IDENTIFIER   = 'IDENTIFIER'
+TT_KEYWORD      = 'KEYWORD'
+TT_EQ           = 'EQ'
+
 '''
     VAR          variable_name       =  <expr>
     ^                ^               ^
     KEYWORD      IDENTIFIER        EQUALS
 '''
 
-KEYWORDS = [
-    'VAR'
-]
+KEYWORDS = ['VAR', 'IF', 'ELSE', 'WHILE', 'FUNC']
 
 ###############
 # TOKEN CLASS #
@@ -59,6 +67,9 @@ class Token(object):
         if pos_end: # If there's a end position provided, make start and end the given end position
             self.pos_end = pos_end.copy() 
             self.pos_start = pos_end.copy()
+    
+    def matches(self, type_, value):
+        return self.type == type_ and self.value == value
 
     def __repr__(self):
         if self.value: return f'{self.type}:{self.value}'

@@ -80,11 +80,11 @@ class Interpreter:
         # This code is a bit weird, but it makes it cleaner; basically lamda function is used
         # to map token types to corresposonding binary_operator methods
         # Example: if token type is ADD, do left.added_to(right), a and b are variables for left and right
-        binary_nodes = {ADD: lambda a, b: a.added_to(b),
-                        SUBTRACT: lambda a, b: a.subbed_by(b),
-                        MULTIPLY: lambda a, b: a.multiply_by(b),
-                        DIVIDE: lambda a, b: a.divide_by(b),
-                        POWER: lambda a, b: a.power_by(b)}
+        binary_nodes = {TT_ADD: lambda a, b: a.added_to(b),
+                        TT_SUBTRACT: lambda a, b: a.subbed_by(b),
+                        TT_MULTIPLY: lambda a, b: a.multiply_by(b),
+                        TT_DIVIDE: lambda a, b: a.divide_by(b),
+                        TT_POWER: lambda a, b: a.power_by(b)}
 
         if node.op_tok.type in binary_nodes:
             result, error = binary_nodes[node.op_tok.type](left, right)
@@ -103,7 +103,7 @@ class Interpreter:
 
         error = None
 
-        if node.op_tok.type == SUBTRACT:
+        if node.op_tok.type == TT_SUBTRACT:
             number, error = number.multiply_by(Number(-1))
         
         if error:

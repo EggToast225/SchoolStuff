@@ -1,7 +1,8 @@
 from Interpreter import *
 from Parser import *
 from Lexer import *
-from Context import Context
+from Context import *
+
 
 def run(fn,text):
     lexer  = Lexer(fn, text)
@@ -21,6 +22,7 @@ def run(fn,text):
     
 
     return result.value, result.error
+
 while True:
     text = input('basic > ')
     result, error = run("<stdin>", text)

@@ -58,10 +58,10 @@ class VarAccessNode(Node):
 
 class VarAssignNode(Node):
     def __init__(self,var_name_tok, value_node):
-        self.var_name = var_name_tok
-        self.expr = value_node
+        self.var_name_tok = var_name_tok
+        self.value_node = value_node
     
-        self.pos_start = self.var_name.pos_start
+        self.pos_start = self.var_name_tok.pos_start
         self.pos_end = value_node.pos_end
     
     def __repr__(self):
@@ -136,7 +136,7 @@ class Parser:
 
     def parse(self):
         res = self.expr() # Enters AST tree, with expression being the highest order
-        if not res.error and self.current_tok.type != EOF: # If current_tok type isn't EOF, that means there's been a syntax error
+        if not res.error and self.current_tok.type != TT_EOF: # If current_tok type isn't EOF, that means there's been a syntax error
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end,
                 "Expected '+', '-' , '*' , '^', or '/'"
@@ -147,7 +147,7 @@ class Parser:
         res = ParseResult()
         tok = self.current_tok
         
-        if tok.type in (INT, FLOAT):    # Integers
+        if tok.type in (TT_INT, TT_FLOAT):    # Integers
             res.register(self.advance())
             return res.success(NumberNode(tok))
         
@@ -156,13 +156,13 @@ class Parser:
             res.success(VarAccessNode(tok))
 
         # Parenthesis case handling
-        elif tok.type == LPARAN: # Left parenthesis
+        elif tok.type == TT_LPAREN: # Left parenthesis
             res.register(self.advance())
             expr = res.register(self.expr())
             if res.error:
                 return res
 
-            if self.current_tok.type == RPARAN: # Right parenthesis
+            if self.current_tok.type == TT_RPAREN: # Right parenthesis
                 res.register(self.advance())
                 return res.success(expr)
             else:
@@ -180,7 +180,7 @@ class Parser:
         res = ParseResult()
         tok = self.current_tok
 
-        if tok.type in (ADD, SUBTRACT): # Unary 
+        if tok.type in (TT_ADD, TT_SUBTRACT): # Unary 
             res.register(self.advance())
             factor = res.register(self.factor())
             if res.error:
@@ -190,39 +190,59 @@ class Parser:
         return self.power()
     
     def term(self): # Calls self.factor and has MULTIPLY and DIVIDE operators
-        return self.binary_operation(self.factor, (MULTIPLY, DIVIDE))
+        return self.binary_operation(self.factor, (TT_MULTIPLY, TT_DIVIDE))
 
     def expr(self): # calls self.term and has ADD, SUB operators; also has variables identifier
         res = ParseResult()
-        tok = self.current_tok
         
-        if tok.type == KEYWORDS and tok.value == 'VAR': # Check to see if the token type is a keyword and is a variable
-            res.register(self.advance())
+        # IF VAR is DECLARED; VAR x = 2
+        if self.current_tok.matches(TT_KEYWORD, 'VAR'): # Check to see if the token type is a keyword and is a variable
+            res.register(self.advance()) # Move past VAR
             
-            if tok.type != TT_IDENTIFIER: # in the case that the next token is not an identifier, return an error
+            if self.current_tok.type != TT_IDENTIFIER: # in the case that the next token is not an identifier, return an error
                 return res.failure (InvalidSyntaxError(
-                    self.current_tok.pos_start, self.current_tok.pos_end, "Expected Identifier"
+                    self.current_tok.pos_start, self.current_tok.pos_end,
+                    "Expected '=' "
                 ))
+            
+
             # if it checks out, the variable_name is the token
-            var_name = tok
+            var_name = self.current_tok
             # we advance to the next position of tokens, which should be a TT_EQ
             res.register(self.advance())
 
-            if tok.type != TT_EQ:
+            if self.current_tok.type != TT_EQ:
                 return res.failure(InvalidSyntaxError(
-                    self.current_tok.pos_start, self.current_tok.pos_end, "Expected Assignment"
+                    self.current_tok.pos_start, self.current_tok.pos_end, "Expected '=' "
                 ))
-            res.register(self.advance())
+            res.register(self.advance())    # Move past '='
 
             # After this, we look for an expression
             expr = res.register(self.expr())
             if res.error(): return res
             return res.success(VarAssignNode(var_name, expr))
+        
+        # WITHOUT VAR
+        elif self.current_tok.type == TT_IDENTIFIER:
+                var_name = self.current_tok #get variable token
+                res.register(self.advance())
 
-        return self.binary_operation(self.term, (ADD, SUBTRACT))
+                if self.current_tok.type != TT_EQ: # check for equal sign
+                    return res.failure(InvalidSyntaxError(
+                        self.current_tok.pos_start, self.current_tok.pos_end,
+                        "Expected '=' "
+                    ))
+                res.register(self.advance()) # move past the =
+
+                expr = res.register(self.expr())  #evaluate the expression
+                if res.error:
+                    return res
+                return res.success(VarAssignNode(var_name, expr))
+
+        return self.binary_operation(self.term, (TT_ADD, TT_SUBTRACT))
 
     def power(self):
-        return self.binary_operation(self.atom, (POWER, ), self.factor)
+        return self.binary_operation(self.atom, (TT_POWER, ), self.factor)
 
 
         # This basically takes a function, makes it run it's generic code with it's operator rules
