@@ -1,9 +1,6 @@
-from Parser import *
 from RTEResult import RTEResult
 from Errors import RunTimeError
-#################
-#   Interpreter
-###################
+from Token import *
 #######################
 #   VALUES
 ####################
@@ -43,6 +40,12 @@ class Number:
                 self.context)
             return Number(self.value / other.value).set_context(self.context), None
 
+    def copy(self):
+        copy = Number(self.value)
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.context)
+        return copy
+    
     def power_by(self,other):
         if isinstance(other,Number):
             return Number(self.value ** other.value).set_context(self.context), None
@@ -50,6 +53,30 @@ class Number:
     def __repr__(self):
         return str(self.value)
         
+####################
+#   SYMBOL TABLE
+####################
+
+class SymbolTable:
+    def __init__(self):
+        self.symbols = {}
+        self.parent = None
+
+    def get(self, name):                        # get value from certain variable name
+        value = self.symbols.get(name,None)     # get name or default value of None
+        if value == None and self.parent:       # If there's a value is None and theres a parent, return the global value
+            return self.parent.get(name)
+        return value                            # otherwise return the local value
+
+    def set(self, name, value):
+        self.symbols[name] = value
+    
+    def remove(self,name):
+        del self.symbols[name]
+
+#################
+#   Interpreter
+###################
 
 class Interpreter:
     def visit(self, node, context):
@@ -95,7 +122,6 @@ class Interpreter:
         else:
             return res.success(result.set_pos(node.pos_start, node.pos_end))
 
-
     def visit_UnaryOpNode(self,node, context):
         res = RTEResult()
         number = res.register(self.visit(node.node, context))
@@ -110,4 +136,31 @@ class Interpreter:
             return res.failure(error)
         else:
             return res.success(number.set_pos(node.pos_start, node.pos_end))
+    
+    def visit_VarAccessNode(self,node,context):
+        res = RTEResult()
+        var_name = node.var_name_tok.value
+        value = context.symbol_table.get(var_name)
+
+        if not value:
+            return res.failure(RunTimeError(
+                node.pos_start, node.pos_end,
+                f"'{var_name}' is not defined",
+                context
+            ))
         
+        value = value.copy().set_pos(node.pos_start, node.pos_end)
+        return res.success(value)
+    
+    def visit_VarAssignNode(self, node, context):
+        res = RTEResult()
+        var_name = node.var_name_tok.value
+        value = res.register(self.visit(node.value_node, context)) # Get the variable value
+        if res.error:return res
+
+        context.symbol_table.set(var_name,value) # This sets a new symbol or variable within the symbol_table dictionary
+        return res.success(value)
+
+
+
+
