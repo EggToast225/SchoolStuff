@@ -39,6 +39,38 @@ class Number:
                 other.pos_end, "Divison by zero",
                 self.context)
             return Number(self.value / other.value).set_context(self.context), None
+        
+        
+    def greater_than(self,other):
+        if isinstance(other, Number):
+            return Number(self.value > other.value).set_context(self.context), None
+        
+    def greater_than_eq(self,other):
+        if isinstance(other, Number):
+            return Number(self.value >= other.value).set_context(self.context), None
+        
+    def less_than(self,other):
+        if isinstance(other, Number):
+            return Number(self.value < other.value).set_context(self.context), None
+        
+    def less_than_eq(self,other):
+        if isinstance(other, Number):
+            return Number(self.value <= other.value).set_context(self.context), None
+    
+    def equal_to(self,other):
+        if isinstance(other, Number):
+            return Number(self.value == other.value).set_context(self.context), None
+    
+    def anded_by(self,other):
+        if isinstance(other, Number):
+            return Number(self.value and other.value).set_context(self.context), None
+    
+    def ored_by(self,other):
+        if isinstance(other, Number):
+            return Number(self.value or other.value).set_context(self.context), None
+        
+    def notted(self):
+        return Number(not self.value).set_context(self.context), None
 
     def copy(self):
         copy = Number(self.value)
@@ -111,9 +143,18 @@ class Interpreter:
                         TT_SUBTRACT: lambda a, b: a.subbed_by(b),
                         TT_MULTIPLY: lambda a, b: a.multiply_by(b),
                         TT_DIVIDE: lambda a, b: a.divide_by(b),
-                        TT_POWER: lambda a, b: a.power_by(b)}
+                        TT_POWER: lambda a, b: a.power_by(b),
 
-        if node.op_tok.type in binary_nodes:
+                        TT_GREATER_THAN: lambda a, b: a.greater_than(b),
+                        TT_GREATER_THAN_EQUALS: lambda a,b: a.greater_than_eq(b),
+                        TT_LESS_THAN: lambda a,b: a.less_than(b),
+                        TT_LESS_THAN_EQUALS: lambda a, b: a.less_than_eq(b),
+                        TT_EQUALS_TO: lambda a, b: a.equal_to(b),
+                        (TT_KEYWORD, 'AND'): lambda a, b: a.anded(b),
+                        (TT_KEYWORD, 'OR'):lambda a, b: a.ored(b)
+                        }
+
+        if (node.op_tok.type or (node.op_tok.type, node.op_tok.value)) in binary_nodes:
             result, error = binary_nodes[node.op_tok.type](left, right)
         
 
@@ -131,6 +172,8 @@ class Interpreter:
 
         if node.op_tok.type == TT_SUBTRACT:
             number, error = number.multiply_by(Number(-1))
+        if node.op_tok.matches(TT_KEYWORD, 'NOT'):
+            number, error = number.notted()
         
         if error:
             return res.failure(error)

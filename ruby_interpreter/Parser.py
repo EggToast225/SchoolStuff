@@ -124,9 +124,15 @@ class Parser:
     
     ###########################################################
     '''
-    Grammer
-    expr    : KEYWORD:VAR IDENTIFIER EQ expr
-            : term ((PLUS|MINUS) term)*
+    Grammar
+    expr
+            : KEYWORD:VAR IDENTIFIER EQ expr
+            : comp-expr((KEYWORDS:AND | KEYWORD: OR); comp-expr)*
+            
+            : NOT comp-expr
+comp-expr   : arith-expr ((EE|LT|GE|LTE|GTE)) arith-expr)*
+
+arith-expr  : term((PLUS|MINUS) term)*
 
     term    : factor ((MUL|DIV) factor)*
 
@@ -202,6 +208,38 @@ class Parser:
     
     def term(self): # Calls self.factor and has MULTIPLY and DIVIDE operators
         return self.binary_operation(self.factor, (TT_MULTIPLY, TT_DIVIDE))
+    
+    def comp_expr(self):
+        res = ParseResult()
+
+        if self.current_tok.matches(TT_KEYWORD, 'NOT'):
+            op_tok = self.current_tok
+            res.register_advancement()
+            self.advance()
+
+            node = res.register(self.comp_expr())
+            if res.error: return res
+            return res.success(UnaryOpNode(op_tok, node))
+
+            
+        node = res.register(self.binary_operation(
+            self.arith_expr, (
+                TT_GREATER_THAN,
+                TT_LESS_THAN,
+                TT_EQUALS_TO,
+                TT_GREATER_THAN_EQUALS,
+                TT_LESS_THAN_EQUALS,
+                TT_NE)))
+        
+        if res.error: return res.failure(InvalidSyntaxError(
+            self.current_tok.pos_start, self.current_tok.pos_end,
+            "Expected int or float, '+', identifier,  '-', '(', or NOT "
+            ))
+        return res.success(node)
+    
+    def arith_expr(self):
+        return self.binary_operation(self.term, (TT_ADD, TT_SUBTRACT))
+        
 
     def expr(self): # calls self.term and has ADD, SUB operators; also has variables identifier
         res = ParseResult()
@@ -232,7 +270,7 @@ class Parser:
             
             self.reverse() # In the case that it's not an assignment, we need to go backtrack
 
-        node = res.register(self.binary_operation(self.term, (TT_ADD, TT_SUBTRACT)))
+        node = res.register(self.binary_operation(self.comp_expr, ((TT_KEYWORD, "AND"), (TT_KEYWORD, "OR"))))
         
         if res.error:
             return res.failure(InvalidSyntaxError(
@@ -255,7 +293,7 @@ class Parser:
         if res.error:
             return res
 
-        while self.current_tok.type in ops:
+        while self.current_tok.type in ops or (self.current_tok.type, self.current_tok.value) in ops:
             op_tok = self.current_tok # Get operator token
             res.register_advancement()
             self.advance()

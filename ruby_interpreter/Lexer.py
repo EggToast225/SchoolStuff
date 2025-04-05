@@ -1,6 +1,6 @@
 from Position import Position
 from Token import *
-from Errors import IllegalCharError
+from Errors import IllegalCharError, ExpectedCharError
 #############
 #   LEXER   # 
 #############
@@ -25,8 +25,22 @@ class Lexer(object):
         tokens = []
 
         single_char_tokens = {
-        '+': TT_ADD, '-': TT_SUBTRACT, '/': TT_DIVIDE, '*': TT_MULTIPLY,
-        '(': TT_LPAREN, ')': TT_RPAREN, '^': TT_POWER, '=': TT_EQ
+        '+': TT_ADD,
+        '-': TT_SUBTRACT,
+        '/': TT_DIVIDE,
+        '*': TT_MULTIPLY,
+        '(': TT_LPAREN,
+        ')': TT_RPAREN,
+        '^': TT_POWER,
+        '>': TT_GREATER_THAN,
+        '<': TT_LESS_THAN
+        }
+        
+        comparison_tokens = {
+            '!': TT_NE,
+            '=': TT_EQ,
+            '>': TT_GREATER_THAN,
+            '<': TT_LESS_THAN
         }
 
         while self.current_char != None:
@@ -36,9 +50,14 @@ class Lexer(object):
                 tokens.append(self.make_numbers())
             elif self.current_char in LETTERS:
                 tokens.append(self.make_identifier())
+            elif self.current_char in comparison_tokens:
+                compare_token, error = self.make_comparison(comparison_tokens)
+                if error: return None, error
+                tokens.append(compare_token)
             elif self.current_char in single_char_tokens:
                 tokens.append(Token(single_char_tokens[self.current_char],pos_start=self.pos,pos_end=self.pos))
                 self.advance()
+            
             # case of an unrecognized character
             else:
                 pos_start = self.pos.copy()
@@ -80,3 +99,29 @@ class Lexer(object):
             tok_type = TT_IDENTIFIER
         
         return Token(tok_type, id_str, pos_start, self.pos)
+    
+    def make_comparison(self, comparison_tokens):
+
+        double_char_tokens = {
+            '!=': TT_NE,
+            '==': TT_EQUALS_TO,
+            '>=': TT_GREATER_THAN_EQUALS,
+            '<=': TT_LESS_THAN_EQUALS
+        }
+
+        comparison_str = ''
+        pos_start = self.pos.copy()
+        while self.current_char != None and (self.current_char in comparison_tokens):
+            comparison_str += self.current_char
+            self.advance()
+
+        if comparison_str in double_char_tokens:
+            tok_type = double_char_tokens[comparison_str]
+        elif comparison_str in comparison_tokens:
+            if comparison_str == '!':
+                return None, ExpectedCharError(pos_start, self.pos, "'=' (after '!')")
+            tok_type = comparison_tokens[comparison_str]
+        
+        
+        return Token(tok_type, comparison_str, pos_start, self.pos),None
+        

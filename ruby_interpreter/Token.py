@@ -27,7 +27,7 @@ TT_POWER        = 'POWER'
 TT_LPAREN       = 'LPAREN'
 TT_RPAREN       = 'RPAREN'
 
-#Variables
+# Variables
 TT_IDENTIFIER   = 'IDENTIFIER'
 TT_KEYWORD      = 'KEYWORD'
 TT_EQ           = 'EQ'
@@ -37,8 +37,17 @@ TT_EQ           = 'EQ'
     ^                ^               ^
     KEYWORD      IDENTIFIER        EQUALS
 '''
+# Comparison Operators
 
-KEYWORDS = ['VAR', 'IF', 'ELSE', 'WHILE', 'FUNC']
+TT_GREATER_THAN         = 'GT'
+TT_LESS_THAN            = 'LT'
+TT_EQUALS_TO            = 'EE'
+TT_GREATER_THAN_EQUALS  = 'GTE'
+TT_LESS_THAN_EQUALS     = 'LTE'
+TT_NE                   = 'NE'
+
+
+KEYWORDS = ['VAR', 'AND', 'OR', 'NOT', 'IF', 'ELSE', 'WHILE', 'FUNC']
 
 ###############
 # TOKEN CLASS #
