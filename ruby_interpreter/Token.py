@@ -47,7 +47,20 @@ TT_LESS_THAN_EQUALS     = 'LTE'
 TT_NE                   = 'NE'
 
 
-KEYWORDS = ['VAR', 'AND', 'OR', 'NOT', 'IF', 'ELSE', 'WHILE', 'FUNC']
+KEYWORDS = ['VAR',
+            'AND',
+            'OR',
+            'NOT',
+            'IF',
+            'THEN',
+            'ELIF',
+            'ELSE',
+            'WHILE',
+            'FUNC',
+            'FOR',
+            'TO',
+            'STEP'
+            ]
 
 ###############
 # TOKEN CLASS #

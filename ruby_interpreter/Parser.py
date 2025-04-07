@@ -45,6 +45,13 @@ class UnaryOpNode(Node):
     def __repr__(self):
         return f'({self.op_tok}, {self.node})'
 
+class IfNode(Node):
+    def __init__(self, cases, else_case):
+        self.cases = cases
+        self.else_case = else_case
+
+        self.pos_start = self.cases[0][0].pos_start
+        self.pos_end = (self.else_case or self.cases[len(self.cases)-1][0]).pos_end
 
 # VARIABLES
 class VarAccessNode(Node):
@@ -143,6 +150,16 @@ arith-expr  : term((PLUS|MINUS) term)*
 
     atom    : INT | FLOAT
             : LPAREN expr RPAREN
+            : if-expr
+
+    if-expr : KEYWORD: IF expr KEYWORD:THEN expr
+              (KEYWORD:ELIF expr KEYWORD: THEN expr)*
+              (KEYWORD:ELSE expr)?
+
+    for-expr: KEYWORD: FOR IDENTIFIER EQ expr KEYWORD: TO expr
+              (KEYWORD:STEP expr)? KEYWORD:THEN expr
+    
+    while-expr: KEYWORD:WHILE expr KEYWORD:THEN expr
     '''
     ###########################################################
 
@@ -186,12 +203,83 @@ arith-expr  : term((PLUS|MINUS) term)*
                     self.current_tok.pos_start, self.current_tok.pos_end,
                     "Expected ')'"
                 ))
-            
+        elif tok.matches(TT_KEYWORD, "IF"):
+            if_expr = res.register(self.if_expr())
+            if res.error: return res
+            return res.success(if_expr)
+
         return res.failure(InvalidSyntaxError(
             tok.pos_start, tok.pos_end,
             "Expected int or float, '+', identifier,  '-', or '(' )"
             ))
     
+    def if_expr(self):
+        res = ParseResult()
+        cases = []
+        else_case = None
+
+        # Checks if IF keyword is used
+        if not self.current_tok.matches(TT_KEYWORD, 'IF'):
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start, self.current_tok.pos_end,
+                f"Expected 'IF"
+            ))
+        # If IF keyword is there, advance to the next part, which is conditions
+        res.register_advancement()
+        self.advance()
+
+        # Conditional expression
+        condition = res.register(self.expr())
+        if res.error: return res
+
+        #THEN Keyword check (if the condition is true, then)
+        if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start, self.current_tok.pos_end,
+                f"Expected 'THEN'"))
+        
+        res.register_advancement()
+        self.advance()
+
+        expr = res.register(self.expr())
+        if res.error: return res
+
+        # Append the cases of the condition
+        cases.append((condition, expr))
+
+        # Any number of ELIF statements, similar to IF, but using ELIF
+        while self.current_tok.matches(TT_KEYWORD, 'ELIF'):
+            res.register_advancement()
+            self.advance()
+
+            condition = res.register(self.expr())
+            if res.error: return res
+
+            if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end,
+                    f"Expected 'THEN"))
+            
+            res.register_advancement()
+            self.advance()
+
+            expr = res.register(self.expr())
+            if res.error: return res
+
+        # ELSE Keyword
+        if self.current_tok.matches(TT_KEYWORD, 'ELSE'):
+            res.register_advancement()
+            self.advance()
+
+            expr = res.register(self.expr())
+            if res.error: return res
+            else_case = expr
+
+        return res.success(IfNode(cases,else_case))
+
+
+
+
     def factor(self):
         res = ParseResult()
         tok = self.current_tok

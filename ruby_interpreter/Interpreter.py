@@ -43,40 +43,43 @@ class Number:
         
     def greater_than(self,other):
         if isinstance(other, Number):
-            return Number(self.value > other.value).set_context(self.context), None
+            return Number(int(self.value > other.value)).set_context(self.context), None
         
     def greater_than_eq(self,other):
         if isinstance(other, Number):
-            return Number(self.value >= other.value).set_context(self.context), None
+            return Number(int(self.value >= other.value)).set_context(self.context), None
         
     def less_than(self,other):
         if isinstance(other, Number):
-            return Number(self.value < other.value).set_context(self.context), None
+            return Number(int(self.value < other.value)).set_context(self.context), None
         
     def less_than_eq(self,other):
         if isinstance(other, Number):
-            return Number(self.value <= other.value).set_context(self.context), None
+            return Number(int(self.value <= other.value)).set_context(self.context), None
     
     def equal_to(self,other):
         if isinstance(other, Number):
-            return Number(self.value == other.value).set_context(self.context), None
+            return Number(int(self.value == other.value)).set_context(self.context), None
     
     def anded_by(self,other):
         if isinstance(other, Number):
-            return Number(self.value and other.value).set_context(self.context), None
+            return Number(int(self.value and other.value)).set_context(self.context), None
     
     def ored_by(self,other):
         if isinstance(other, Number):
-            return Number(self.value or other.value).set_context(self.context), None
+            return Number(int(self.value or other.value)).set_context(self.context), None
         
     def notted(self):
-        return Number(not self.value).set_context(self.context), None
+        return Number(1 if self.value == 0 else 0).set_context(self.context), None
 
     def copy(self):
         copy = Number(self.value)
         copy.set_pos(self.pos_start, self.pos_end)
         copy.set_context(self.context)
         return copy
+    
+    def is_true(self):
+        return self.value != 0
     
     def power_by(self,other):
         if isinstance(other,Number):
@@ -204,6 +207,25 @@ class Interpreter:
         context.symbol_table.set(var_name,value) # This sets a new symbol or variable within the symbol_table dictionary
         return res.success(value)
 
+    def visit_IfNode(self, node, context):
+        res = RTEResult()
+
+        for condition, expr in node.cases:
+            condition_value = res.register(self.visit(condition, context))
+            if res.error: return res
+
+            if condition_value.is_true():
+                expr_value = res.register(self.visit(expr, context))
+                if res.error: return res
+                return res.success(expr_value)
+            
+
+        if node.else_case:
+            else_value = res.register(self.visit(node.else_case, context))
+            if res.error: return res
+            return res.success(else_value)
+        
+        return res.success(None)
 
 
 
