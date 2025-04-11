@@ -1,113 +1,61 @@
 from RTEResult import RTEResult
 from Errors import RunTimeError
 from Token import *
-#######################
-#   VALUES
-####################
+from Context import Context
+from SymbolTable import SymbolTable
+from Value import *
+    
+######################
+#   Function Class
+######################
 
-class Number:
-    def __init__(self,value):
-        self.value = value
-        self.set_pos()
-        self.set_context()
+class Function(Value):
+    def __init__(self,name, body_node, arg_names):
+        super().__init__()
+        self.name = name or "<anonymous>"
+        self.body_node = body_node
+        self.arg_names = arg_names
+    
+    def execute(self,args):
+        res = RTEResult()
+        interpreter = Interpreter()
+        new_context = Context(self.name, self.context, self.pos_start)
+        new_context.symbol_table = SymbolTable(new_context.parent.symbol_table)
 
-    def set_pos(self, pos_start = None, pos_end = None):
-        self.pos_start = pos_start
-        self.pos_end = pos_end
-        return self
-    
-    def set_context(self,context =None):
-        self.context = context
-        return self
+        if len(args) > len(self.arg_names):
+            return res.failure(RunTimeError(
+                self.pos_start, self.pos_end,
+                f"{len(args) - len(self.arg_names)} too many args passed into {self.name}",
+                self.context
+            ))
+        
+        elif len(args) < len(self.arg_names):
+            return res.failure(RunTimeError(
+                self.pos_start, self.pos_end,
+                f"{len(args) - len(self.arg_names)} too few args passed into {self.name}",
+                self.context
+            ))
+        
+        for i in range(len(args)): # in the list of arg_name and args, get name and value
+            arg_name = self.arg_names[i]
+            arg_value = args[i]
+            arg_value.set_context(new_context) # update value to new context
+            new_context.symbol_table.set(arg_name,arg_value) #Add to new context
 
-    def added_to(self, other):
-        if isinstance(other, Number):
-            return Number(self.value + other.value).set_context(self.context), None
-    
-    def subbed_by(self, other):
-        if isinstance(other, Number):
-            return Number(self.value - other.value).set_context(self.context), None
-        
-    def multiply_by(self, other):
-        if isinstance(other, Number):
-            return Number(self.value * other.value).set_context(self.context), None
-        
-    def divide_by(self, other):
-        if isinstance(other, Number):
-            if other.value == 0:
-                return None, RunTimeError(other.pos_start, 
-                other.pos_end, "Divison by zero",
-                self.context)
-            return Number(self.value / other.value).set_context(self.context), None
-        
-        
-    def greater_than(self,other):
-        if isinstance(other, Number):
-            return Number(int(self.value > other.value)).set_context(self.context), None
-        
-    def greater_than_eq(self,other):
-        if isinstance(other, Number):
-            return Number(int(self.value >= other.value)).set_context(self.context), None
-        
-    def less_than(self,other):
-        if isinstance(other, Number):
-            return Number(int(self.value < other.value)).set_context(self.context), None
-        
-    def less_than_eq(self,other):
-        if isinstance(other, Number):
-            return Number(int(self.value <= other.value)).set_context(self.context), None
-    
-    def equal_to(self,other):
-        if isinstance(other, Number):
-            return Number(int(self.value == other.value)).set_context(self.context), None
-    
-    def anded_by(self,other):
-        if isinstance(other, Number):
-            return Number(int(self.value and other.value)).set_context(self.context), None
-    
-    def ored_by(self,other):
-        if isinstance(other, Number):
-            return Number(int(self.value or other.value)).set_context(self.context), None
-        
-    def notted(self):
-        return Number(1 if self.value == 0 else 0).set_context(self.context), None
+        value = res.register(interpreter.visit(self.body_node, new_context))
+        if res.error: return res
 
+        return res.success(value)
+    
     def copy(self):
-        copy = Number(self.value)
-        copy.set_pos(self.pos_start, self.pos_end)
+        copy = Function(self.name, self.body_node, self.arg_names)
         copy.set_context(self.context)
+        copy.set_pos(self.pos_start, self.pos_end)
         return copy
     
-    def is_true(self):
-        return self.value != 0
-    
-    def power_by(self,other):
-        if isinstance(other,Number):
-            return Number(self.value ** other.value).set_context(self.context), None
-    
     def __repr__(self):
-        return str(self.value)
-        
-####################
-#   SYMBOL TABLE
-####################
-
-class SymbolTable:
-    def __init__(self):
-        self.symbols = {}
-        self.parent = None
-
-    def get(self, name):                        # get value from certain variable name
-        value = self.symbols.get(name,None)     # get name or default value of None
-        if value == None and self.parent:       # If there's a value is None and theres a parent, return the global value
-            return self.parent.get(name)
-        return value                            # otherwise return the local value
-
-    def set(self, name, value):
-        self.symbols[name] = value
+        return f"<function {self.name}>"
     
-    def remove(self,name):
-        del self.symbols[name]
 
 #################
 #   Interpreter
@@ -259,11 +207,48 @@ class Interpreter:
         
         return res.success(None)
 
-
-
-
     def visit_WhileNode(self, node,context):
-        pass
+        res = RTEResult
 
+        while True:
+            condition = res.register(self.visit(node.condition_node, context))
+            if res.error: return res
 
+            if not condition.is_true(): break
 
+            res.register(self.visit(node.body_node,context))
+            if res.error: return res
+        
+        return res.success(None)
+    
+    def visit_FunctionDefinitionNode(self, node, context):
+        res = RTEResult()
+
+        func_name = node.var_name_tok.value if node.var_name_tok else None
+
+        body_node =  node.body_node
+        arg_names = [arg_names.value for arg_names in node.arg_name_toks] # list of names (Strings) in arg_name_toks
+        func_value = Function(func_name,body_node, arg_names).set_context(context).set_pos(node.pos_start, node.pos_end)
+
+        if node.var_name_tok: # If the has a name, we want to add function name with function value
+            context.symbol_table.set(func_name, func_value)
+
+        return res.success(func_value)
+
+    def visit_CallNode(self, node, context):
+        res = RTEResult()
+        args = [] # List of arguments being passed into the node when function is called
+
+        value_to_call = res.register(self.visit(node.node_to_call,context))
+        if res.error: return res
+
+        value_to_call = value_to_call.copy().set_pos(node.pos_start,  node.pos_end)
+
+        for arg_node in node.arg_nodes:
+            args.append(res.register(self.visit(arg_node, context)))
+            if res.error: return res
+
+        return_value = res.register(value_to_call.execute(args))
+        if res.error: return res
+
+        return res.success(return_value)

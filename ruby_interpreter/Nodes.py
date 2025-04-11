@@ -1,0 +1,122 @@
+##################
+# NODES
+#################
+class Node(): pass
+
+# Node for number tokens
+# Just turns a number token into a Node
+class NumberNode(Node):
+    def __init__(self,tok):
+        self.tok = tok
+
+        self.pos_start = self.tok.pos_start
+        self.pos_end = self.tok.pos_end
+
+    def __repr__(self):
+        return f'{self.tok}'
+
+# Node for Binary Operator Tokens like +, -, *, /, ^
+# Requires a left node, operator token, and right node
+class BinaryOperatorNode(Node):
+    def __init__(self, left_node, op_tok, right_node):
+        self.left_node = left_node
+        self.op_tok = op_tok
+        self.right_node = right_node
+
+        self.pos_start = self.left_node.pos_start
+        self.pos_end = self.right_node.pos_end
+    
+    def __repr__(self):
+        return f'({self.left_node}, {self.op_tok}, {self.right_node})'
+
+# Node for Unary Operators like -
+# Requires unary token and Node (Usually number Node)
+class UnaryOpNode(Node):
+    def __init__(self, op_tok, node):
+        self.op_tok = op_tok
+        self.node = node
+
+        self.pos_start = self.op_tok.pos_start
+        self.pos_end = node.pos_end
+
+    def __repr__(self):
+        return f'({self.op_tok}, {self.node})'
+
+
+# VARIABLES
+class VarAccessNode(Node):
+    def __init__(self, var_name_tok):
+        self.var_name_tok = var_name_tok
+
+        self.pos_start = self.var_name_tok.pos_start
+        self.pos_end = self.var_name_tok.pos_end
+
+class VarAssignNode(Node):
+    def __init__(self,var_name_tok, value_node):
+        self.var_name_tok = var_name_tok
+        self.value_node = value_node
+    
+        self.pos_start = self.var_name_tok.pos_start
+        self.pos_end = value_node.pos_end
+    
+    def __repr__(self):
+        return f'{self.var_name} = {self.expr}'
+
+
+# Conditional Nodes
+class ForNode(Node):
+    def __init__(self, var_name_tok, start_value_node, end_value_node, step_value_node, body_node):
+        self.var_name_tok = var_name_tok
+        self.start_value_node = start_value_node
+        self.end_value_node = end_value_node
+        self.step_value_node = step_value_node
+        self.body_node = body_node
+
+        self.pos_start = self.var_name_tok.pos_start
+        self.pos_end = self.body_node.pos_end
+
+class WhileNode(Node):
+    def __init__(self, condition_node, body_node):
+        self.condition_node = condition_node
+        self.body_node = body_node
+
+        self.pos_start = self.condition_node.pos_start
+        self.pos_end = self.body_node.pos_end
+
+
+class IfNode(Node):
+    def __init__(self, cases, else_case):
+        self.cases = cases
+        self.else_case = else_case
+
+        self.pos_start = self.cases[0][0].pos_start
+        self.pos_end = (self.else_case or self.cases[len(self.cases)-1][0]).pos_end
+
+# Function Definition Node
+
+class FunctionDefinitionNode(Node):
+    def __init__(self, var_name_tok, arg_name_toks, boy_node):
+        self.var_name_tok = var_name_tok    # Function Name
+        self.arg_name_toks = arg_name_toks  # List of arguments
+        self.body_node = boy_node           # Body Node
+
+        if self.var_name_tok:                   #If the function has a name, set position at function name
+            self.pos_start = self.var_name_tok.pos_start
+        elif len(self.arg_name_toks) > 0:       # If theres arguments or parameters, set those as starting point 
+            self.pos_start = arg_name_toks[0].pos_start
+        else:
+            self.pos_start = self.body_node.pos_start # Use body node
+
+        self.pos_end = self.body_node.pos_end
+
+class CallNode(Node):
+    def __init__(self, node_to_call, arg_nodes): # Takes in function and then list of arguments
+        self.node_to_call = node_to_call
+        self.arg_nodes = arg_nodes
+
+        self.pos_start = self.node_to_call.pos_start
+        
+        if len(arg_nodes) > 0:
+            self.pos_end = self.arg_nodes[-1].pos_end
+        else:
+            self.pos_end = self.node_to_call.pos_end

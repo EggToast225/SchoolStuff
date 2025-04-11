@@ -33,7 +33,8 @@ class Lexer(object):
         ')': TT_RPAREN,
         '^': TT_POWER,
         '>': TT_GREATER_THAN,
-        '<': TT_LESS_THAN
+        '<': TT_LESS_THAN,
+        ',': TT_COMMA
         }
         
         comparison_tokens = {
@@ -55,9 +56,13 @@ class Lexer(object):
                 if error: return None, error
                 tokens.append(compare_token)
             elif self.current_char in single_char_tokens:
-                tokens.append(Token(single_char_tokens[self.current_char],pos_start=self.pos,pos_end=self.pos))
-                self.advance()
-            
+                if self.current_char == '-':
+                    tokens.append(self.make_minus_or_arrow())
+                else:
+                    tokens.append(Token(single_char_tokens[self.current_char],pos_start=self.pos,pos_end=self.pos))
+                    self.advance()
+
+
             # case of an unrecognized character
             else:
                 pos_start = self.pos.copy()
@@ -124,4 +129,16 @@ class Lexer(object):
         
         
         return Token(tok_type, comparison_str, pos_start, self.pos),None
+    
+    def make_minus_or_arrow(self):
+        tok_type = TT_SUBTRACT
+        pos_start = self.pos.copy()
+
+        self.advance()
+
+        if self.current_char == '>':
+            tok_type = TT_ARROW
+            self.advance()
         
+        return Token(tok_type, pos_start=pos_start, pos_end=self.pos)
+    

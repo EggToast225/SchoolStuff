@@ -59,8 +59,14 @@ KEYWORDS = ['VAR',
             'FUNC',
             'FOR',
             'TO',
+            'FUN',
             'STEP'
             ]
+
+# Functions
+
+TT_COMMA = 'COMMA'
+TT_ARROW = 'ARROW'
 
 ###############
 # TOKEN CLASS #
