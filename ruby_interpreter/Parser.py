@@ -24,8 +24,9 @@ arith-expr  : term((PLUS|MINUS) term)*
 
     call    : atom (LPAREN (expr (COMMA IDENTIFIER)*) RPAREN)?
 
-    atom    : INT | FLOAT
+    atom    : INT | FLOAT | STRING | IDENTIFIER
             : LPAREN expr RPAREN
+            : list_expr
             : if-expr
             : for-expr
             : while-expr
@@ -102,7 +103,7 @@ class Parser:
                 if res.error:
                     return res.failure(InvalidSyntaxError(
                     self.current_tok.pos_start, self.current_tok.pos_end,
-                    "Expected ')', 'VAR', 'IF', 'FOR','WHILE', 'FUN', int, float, identifier"
+                    "Expected ')', 'VAR', 'IF', 'FOR','WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[', or 'NOT')"
                 ))
                 # Argument in comma seperate; get all args and add them to list of args
                 while self.current_tok.type == TT_COMMA:
@@ -131,6 +132,10 @@ class Parser:
             self.parse_next(res)
             return res.success(NumberNode(tok))
         
+        if tok.type == TT_STRING:
+            self.parse_next(res)
+            return res.success(StringNode(tok))
+        
         elif tok.type == TT_IDENTIFIER:
             self.parse_next(res)
             return res.success(VarAccessNode(tok))
@@ -149,6 +154,11 @@ class Parser:
                     self.current_tok.pos_start, self.current_tok.pos_end,
                     "Expected ')'"
                 ))
+        elif tok.type == TT_LSQUARE:
+            list_expr = res.register(self.list_expr())
+            res.is_valid()
+            return res.success(list_expr)
+        
         elif tok.matches(TT_KEYWORD, 'IF'):
             if_expr = res.register(self.if_expr())
             res.is_valid()
@@ -171,9 +181,51 @@ class Parser:
 
         return res.failure(InvalidSyntaxError(
             tok.pos_start, tok.pos_end,
-            "Expected int or float, '+', identifier,  '-', or '(' ), 'VAR', 'IF', 'FOR','WHILE', 'FUN'"
+            "Expected int or float, '+', identifier,  '-', or '(', ')', '[', 'VAR', 'IF', 'FOR','WHILE', 'FUN'"
             ))
     
+    def list_expr(self):
+        res = ParseResult()
+        element_nodes = []
+        pos_start = self.current_tok.pos_start.copy()
+
+        if self.current_tok.type != TT_LSQUARE:
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start, self.current_tok.pos_end,
+                f"Expected '['"
+            ))
+        self.parse_next(res)
+
+        if self.current_tok.type == TT_RSQUARE:
+            self.parse_next(res)
+        else:
+            element_nodes.append(res.register(self.expr()))
+            if res.error:
+                    return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end,
+                    "Expected ')', 'VAR', 'IF', 'FOR','WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[', or 'NOT')"
+                ))
+            # Elements in comma seperate; get all elements
+
+            while self.current_tok.type == TT_COMMA:
+                self.parse_next(res)
+                element_nodes.append(res.register(self.expr()))
+                res.is_valid()
+
+            # At the end of the list, close off with a ']'
+            if self.current_tok.type != TT_RSQUARE:
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end,
+                    "Expected ',', ']'"
+                    ))
+            self.parse_next(res)
+            
+        return res.success(ListNode(element_nodes,
+                        pos_start,
+                        self.current_tok.pos_end.copy()))
+
+        
+
     def if_expr(self):
         res = ParseResult()
         cases = []
@@ -235,7 +287,7 @@ class Parser:
     
     def for_expr(self):
         res = ParseResult()
-
+        
         # Check if we have FOR
         if not self.current_tok.matches(TT_KEYWORD, 'FOR'):
             return res.failure(InvalidSyntaxError(
@@ -366,7 +418,7 @@ class Parser:
         
         if res.error: return res.failure(InvalidSyntaxError(
             self.current_tok.pos_start, self.current_tok.pos_end,
-            "Expected int or float, '+', identifier,  '-', '(', or NOT "
+            "Expected int or float, '+', identifier,  '-', '(', '[', or NOT "
             ))
         return res.success(node)
     
@@ -405,7 +457,7 @@ class Parser:
         if res.error:
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end,
-                "Expected 'VAR', int, float, identifier, '+', '-', or '(', 'IF', 'FOR','WHILE', and 'FUN'"
+                "Expected 'VAR', int, float, identifier, '+', '-', or '(', '[', 'IF', 'FOR','WHILE', and 'FUN'"
             ))
         return res.success(node)
 

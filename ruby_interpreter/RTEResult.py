@@ -19,3 +19,7 @@ class RTEResult:
     def failure(self, error):
         self.error = error
         return self
+    
+    def is_valid(self):
+        if self.error:
+            return self

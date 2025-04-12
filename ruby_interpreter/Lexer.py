@@ -31,6 +31,8 @@ class Lexer(object):
         '*': TT_MULTIPLY,
         '(': TT_LPAREN,
         ')': TT_RPAREN,
+        '[': TT_LSQUARE,
+        ']': TT_RSQUARE,
         '^': TT_POWER,
         '>': TT_GREATER_THAN,
         '<': TT_LESS_THAN,
@@ -42,6 +44,10 @@ class Lexer(object):
             '=': TT_EQ,
             '>': TT_GREATER_THAN,
             '<': TT_LESS_THAN
+        }
+        
+        string_token = {
+            '"': TT_STRING
         }
 
         while self.current_char != None:
@@ -61,7 +67,8 @@ class Lexer(object):
                 else:
                     tokens.append(Token(single_char_tokens[self.current_char],pos_start=self.pos,pos_end=self.pos))
                     self.advance()
-
+            elif self.current_char in string_token:
+                tokens.append(self.make_string())
 
             # case of an unrecognized character
             else:
@@ -106,7 +113,6 @@ class Lexer(object):
         return Token(tok_type, id_str, pos_start, self.pos)
     
     def make_comparison(self, comparison_tokens):
-
         double_char_tokens = {
             '!=': TT_NE,
             '==': TT_EQUALS_TO,
@@ -142,3 +148,26 @@ class Lexer(object):
         
         return Token(tok_type, pos_start=pos_start, pos_end=self.pos)
     
+    def make_string(self):
+        string = ''
+        pos_start = self.pos.copy()
+        escape_char = False
+        self.advance()
+
+        escape_characters = {
+            'n': '\n',
+            't': '\t'
+        }
+
+        while self.current_char != None and (self.current_char != '"' or escape_char):
+            if escape_char:
+                string += escape_characters.get(self.current_char, self.current_char) # will use second arg if not in dictionary
+            else:
+                if self.current_char == '\\': # If it's a backslash, escape next character
+                    escape_char = True
+                string += self.current_char
+            self.advance()
+            escape_char = False
+        
+        self.advance()
+        return Token(TT_STRING, string, pos_start, self.pos)

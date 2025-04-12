@@ -73,6 +73,10 @@ class Interpreter:
     def visit_NumberNode(self,node, context):
         return RTEResult().success(
             Number(node.tok.value).set_context(context).set_pos(node.pos_start, node.pos_end))
+    
+    def visit_StringNode(self,node, context):
+        return RTEResult().success(
+            String(node.tok.value).set_context(context).set_pos(node.pos_start, node.pos_end))
 
     def visit_BinaryOperatorNode(self,node, context):
         # after finding binary operator, needs to find left number node and right number node
@@ -107,17 +111,14 @@ class Interpreter:
 
         if (node.op_tok.type or (node.op_tok.type, node.op_tok.value)) in binary_nodes:
             result, error = binary_nodes[node.op_tok.type](left, right)
-        
-
         if error:
             return res.failure(error)
-        else:
-            return res.success(result.set_pos(node.pos_start, node.pos_end))
+        return res.success(result.set_pos(node.pos_start, node.pos_end))
 
     def visit_UnaryOpNode(self,node, context):
         res = RTEResult()
         number = res.register(self.visit(node.node, context))
-        if res.error: return res
+        res.is_valid()
 
         error = None
 
@@ -128,8 +129,7 @@ class Interpreter:
         
         if error:
             return res.failure(error)
-        else:
-            return res.success(number.set_pos(node.pos_start, node.pos_end))
+        return res.success(number.set_pos(node.pos_start, node.pos_end))
     
     def visit_VarAccessNode(self,node,context):
         res = RTEResult()
@@ -177,6 +177,7 @@ class Interpreter:
     
     def visit_ForNode(self, node, context):
         res = RTEResult()
+        elements = []
 
         start_value = res.register(self.visit(node.start_value_node, context))
         if res.error: return res
@@ -187,28 +188,29 @@ class Interpreter:
         if node.step_value_node:
             step_value = res.register(self.visit(node.step_value_node, context))
             if res.error: return res
-        else:
             step_value = Number(1)
 
         i = start_value.value
 
         # Basically if we start from incrementing down or up
-        if step_value.value >= 0:
-            condition = lambda: i < end_value.value
-        else:
+        condition = lambda: i < end_value.value
+        if step_value.value < 0:
             condition = lambda: i > end_value.value
 
         while condition():
             context.symbol_table.set(node.var_name_tok.value, Number(i))
             i += step_value.value
 
-            res.register(self.visit(node.body_node, context))
-            if res.error: return res
+            elements.append(res.register(self.visit(node.body_node, context)))
+            res.is_valid()
         
-        return res.success(None)
+        return res.success(
+            List(elements).set_context(context).set_pos(node.pos_start, node.pos_end)
+        )
 
     def visit_WhileNode(self, node,context):
-        res = RTEResult
+        res = RTEResult()
+        elements = []
 
         while True:
             condition = res.register(self.visit(node.condition_node, context))
@@ -216,10 +218,12 @@ class Interpreter:
 
             if not condition.is_true(): break
 
-            res.register(self.visit(node.body_node,context))
+            elements.append(res.register(self.visit(node.body_node,context)))
             if res.error: return res
         
-        return res.success(None)
+        return res.success(
+            List(elements).set_context(context).set_pos(node.pos_start, node.pos_end)
+            )
     
     def visit_FunctionDefinitionNode(self, node, context):
         res = RTEResult()
@@ -252,3 +256,15 @@ class Interpreter:
         if res.error: return res
 
         return res.success(return_value)
+    
+    def visit_ListNode(self, node, context):
+        res = RTEResult()
+        elements = []
+
+        for element_node in node.element_nodes:
+            elements.append(res.register(self.visit(element_node, context)))
+            res.is_valid()
+        
+        return res.success(
+            List(elements).set_context(context).set_pos(node.pos_start, node.pos_end)
+            )

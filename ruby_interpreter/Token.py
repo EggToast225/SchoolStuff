@@ -64,9 +64,15 @@ KEYWORDS = ['VAR',
             ]
 
 # Functions
-
 TT_COMMA = 'COMMA'
 TT_ARROW = 'ARROW'
+
+# Strings
+TT_STRING = 'STRING'
+
+# Lists
+TT_LSQUARE = 'LSQUARE'
+TT_RSQUARE = 'RSQUARE'
 
 ###############
 # TOKEN CLASS #

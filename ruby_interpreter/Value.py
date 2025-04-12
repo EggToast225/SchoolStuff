@@ -2,6 +2,8 @@
 #   VALUES
 ####################
 
+from Errors import RunTimeError
+from RTEResult import RTEResult
 
 ######################
 #   Value Class
@@ -31,7 +33,7 @@ class Value: # This class basically returns an error if there is an illegal oper
 
     def illegal_operation(self, other=None): # main point of this class
         if not other: other = self
-        return RTEResult(
+        return RunTimeError(
 			self.pos_start, other.pos_end,
 			'Illegal operation',
 			self.context
@@ -48,6 +50,8 @@ class Number(Value):
     def _binary_op(self, other, op_func): # Checks to see if operation is between two numbers, then does a function, which is lambda.
         if isinstance(other,Number):
             return Number(op_func(self.value,other.value)).set_context(self.context), None
+        elif isinstance(other,String):
+            return String(op_func(self.value,other.value)).set_context(self.context), None
         return None, super().illegal_operation(other)   # Otherwise, operation is illegal
     
     def _comparison_op(self, other, op_func): # Checks to see if operation is between two numbers, then does a function, which is lambda.
@@ -110,3 +114,85 @@ class Number(Value):
     
     def __repr__(self):
         return str(self.value)
+    
+class String(Value):
+    def __init__(self,value):
+        super().__init__()
+        self.value = value
+
+    def added_to(self,other):
+        if isinstance(other,String):
+            return String(self.value + other.value).set_context(self.context), None
+        return None, super().illegal_operation(other)
+
+    def multiply_by(self,other):
+        if isinstance(other,Number):
+            return String(self.value * other.value).set_context(self.context), None
+        return None, super().illegal_operation(other)
+
+    def is_true(self):
+        return len(self.value) > 0
+
+    def copy(self):
+        copy = Number(self.value)
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.context)
+        return copy
+    
+    def __repr__(self):
+        return f'"{self.value}"'
+
+class List(Value):
+    def __init__(self, elements):
+        super().__init__()
+        self.elements = elements
+
+    def added_to(self,other):
+        new_list = self.copy()
+        new_list.elements.append(other)
+        return new_list, None
+    
+    def multiply_by(self,other):
+        if isinstance(other, List):
+            new_list = self.copy()
+            new_list.elements.extend(other.elements)
+            return new_list, None
+        else:
+            return None, super().illegal_operation(other)
+    
+    def subbed_by(self,other):
+        if isinstance(other, List):
+            new_list = self.copy()
+            try:
+                new_list.elements.pop(other)
+                return new_list, None
+            except:
+                return None, RunTimeError(
+                    other.pos_start, other.pos_end,
+                    "Element at this index can not be removed, index is out of bounds",
+                    self.context
+                )
+        else:
+            return None,super().illegal_operation(other)
+        
+    def divide_by(self,other):
+        if isinstance(other, Number):
+            try:
+                return self.elements[other.value], None
+            except:
+                return None, RunTimeError(
+                    other.pos_start, other.pos_end,
+                    "Element at this index can not be retrieved, index is out of bounds",
+                    self.context
+                )
+        else:
+            return None,super().illegal_operation(other)
+    
+    def copy(self):
+        copy = List(self.elements[:])
+        copy.set_pos(self.pos_start, self.pos_end)
+        copy.set_context(self.context)
+        return copy
+    
+    def __repr__(self):
+        return f'[{", ".join([str(x) for x in self.elements])}]'

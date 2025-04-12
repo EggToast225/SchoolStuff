@@ -3,6 +3,8 @@
 #################
 class Node(): pass
 
+
+
 # Node for number tokens
 # Just turns a number token into a Node
 class NumberNode(Node):
@@ -120,3 +122,20 @@ class CallNode(Node):
             self.pos_end = self.arg_nodes[-1].pos_end
         else:
             self.pos_end = self.node_to_call.pos_end
+
+class StringNode(Node):
+    def __init__(self,tok):
+        self.tok = tok
+
+        self.pos_start = self.tok.pos_start
+        self.pos_end = self.tok.pos_end
+
+    def __repr__(self):
+        return f'{self.tok}'
+
+class ListNode(Node):
+    def __init__(self, element_nodes, pos_start, pos_end):
+        self.element_nodes = element_nodes
+
+        self.pos_start = pos_start
+        self.pos_end = pos_end
