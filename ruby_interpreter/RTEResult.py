@@ -21,5 +21,4 @@ class RTEResult:
         return self
     
     def is_valid(self):
-        if self.error:
-            return self
+        return (bool(self.error))

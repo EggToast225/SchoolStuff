@@ -88,7 +88,7 @@ class Parser:
         res = ParseResult()
         # Search for an atom
         atom = res.register(self.atom())
-        res.is_valid()
+        if res.is_valid(): return res
         
         # If we have ( or list of arguments
         if self.current_tok.type == TT_LPAREN:
@@ -109,7 +109,8 @@ class Parser:
                 while self.current_tok.type == TT_COMMA:
                     self.parse_next(res)
                     arg_nodes.append(res.register(self.expr()))
-                    res.is_valid()
+                    if res.is_valid(): return res
+
                 # At the end of the list, close off with a ')'
                 if self.current_tok.type != TT_RPAREN:
                     return res.failure(InvalidSyntaxError(
@@ -144,7 +145,7 @@ class Parser:
         elif tok.type == TT_LPAREN: # Left parenthesis
             self.parse_next(res)
             expr = res.register(self.expr())
-            res.is_valid()
+            if res.is_valid(): return res
 
             if self.current_tok.type == TT_RPAREN: # Right parenthesis
                 self.parse_next(res)
@@ -156,27 +157,27 @@ class Parser:
                 ))
         elif tok.type == TT_LSQUARE:
             list_expr = res.register(self.list_expr())
-            res.is_valid()
+            if res.is_valid(): return res
             return res.success(list_expr)
         
         elif tok.matches(TT_KEYWORD, 'IF'):
             if_expr = res.register(self.if_expr())
-            res.is_valid()
+            if res.is_valid(): return res
             return res.success(if_expr)
         
         elif tok.matches(TT_KEYWORD, 'FOR'):
             for_expr = res.register(self.for_expr())
-            res.is_valid()
+            if res.is_valid(): return res
             return res.success(for_expr)
         
         elif tok.matches(TT_KEYWORD, 'WHILE'):
             while_expr = res.register(self.while_expr())
-            res.is_valid()
+            if res.is_valid(): return res
             return res.success(while_expr)
         
         elif tok.matches(TT_KEYWORD, 'FUN'):
             func_def = res.register(self.func_def())
-            res.is_valid()
+            if res.is_valid(): return res
             return res.success(func_def)
 
         return res.failure(InvalidSyntaxError(
@@ -210,7 +211,7 @@ class Parser:
             while self.current_tok.type == TT_COMMA:
                 self.parse_next(res)
                 element_nodes.append(res.register(self.expr()))
-                res.is_valid()
+                if res.is_valid(): return res
 
             # At the end of the list, close off with a ']'
             if self.current_tok.type != TT_RSQUARE:
@@ -242,7 +243,7 @@ class Parser:
 
         # Conditional expression
         condition = res.register(self.expr())
-        res.is_valid()
+        if res.is_valid(): return res
 
         #THEN Keyword check (if the condition is true, then)
         if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
@@ -253,8 +254,7 @@ class Parser:
         self.parse_next(res)
 
         expr = res.register(self.expr())
-        res.is_valid()
-
+        if res.is_valid(): return res
         # Append the cases of the condition
         cases.append((condition, expr))
 
@@ -263,7 +263,7 @@ class Parser:
             self.parse_next(res)
 
             condition = res.register(self.expr())
-            res.is_valid()
+            if res.is_valid(): return res
 
             if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
                 return res.failure(InvalidSyntaxError(
@@ -273,14 +273,14 @@ class Parser:
             self.parse_next(res)
 
             expr = res.register(self.expr())
-            res.is_valid()
+            if res.is_valid(): return res
 
         # ELSE Keyword
         if self.current_tok.matches(TT_KEYWORD, 'ELSE'):
             self.parse_next(res)
 
             expr = res.register(self.expr())
-            res.is_valid()
+            if res.is_valid(): return res
             else_case = expr
 
         return res.success(IfNode(cases,else_case))
@@ -319,7 +319,7 @@ class Parser:
         self.parse_next(res)
 
         start_value = res.register(self.expr())
-        res.is_valid()
+        if res.is_valid(): return res
 
         if not self.current_tok.matches(TT_KEYWORD, "TO"):
             return res.failure(InvalidSyntaxError(
@@ -330,13 +330,13 @@ class Parser:
         self.parse_next(res)
 
         end_value = res.register(self.expr())
-        res.is_valid()
+        if res.is_valid(): return res
 
         if self.current_tok.matches(TT_KEYWORD, 'STEP'):
             self.parse_next(res)
             
             step_value = res.register(self.expr())
-            res.is_valid()
+            if res.is_valid(): return res
         else:
             step_value = None
         
@@ -348,7 +348,7 @@ class Parser:
         self.parse_next(res)
 
         body = res.register(self.expr())
-        res.is_valid()
+        if res.is_valid(): return res
 
         return res.success(ForNode(var_name, start_value, end_value, step_value, body))
 
@@ -363,7 +363,7 @@ class Parser:
         self.parse_next(res)
 
         condition = res.register(self.expr())
-        res.is_valid()
+        if res.is_valid(): return res
         
         if self.current_tok.matches(TT_KEYWORD, 'THEN'):
                 return res.failure(InvalidSyntaxError(
@@ -374,7 +374,7 @@ class Parser:
         self.parse_next(res)
 
         body = res.register(self.expr())
-        res.is_valid()
+        if res.is_valid(): return res
 
         return res.success(WhileNode(condition, body))
 
@@ -403,7 +403,7 @@ class Parser:
             self.parse_next(res)
 
             node = res.register(self.comp_expr())
-            res.is_valid()
+            if res.is_valid(): return res
             return res.success(UnaryOpNode(op_tok, node))
 
             
@@ -447,7 +447,7 @@ class Parser:
                 self.parse_next(res)
                 expr = res.register(self.expr()) # Get the expression of that variable
 
-                res.is_valid()
+                if res.is_valid(): return res
                 return res.success(VarAssignNode(var_name, expr)) # Return Assign node
             
             self.reverse() # In the case that it's not an assignment, we need to go backtrack
@@ -473,13 +473,13 @@ class Parser:
 
         res = ParseResult()
         left = res.register(func()) # Get left-side expression
-        res.is_valid()
+        if res.is_valid(): return res
 
         while self.current_tok.type in ops or (self.current_tok.type, self.current_tok.value) in ops:
             op_tok = self.current_tok # Get operator token
             self.parse_next(res)
             right = res.register(func_b()) # Get right-side expression
-            res.is_valid()
+            if res.is_valid(): return res
             left = BinaryOperatorNode(left, op_tok, right)
         
         return res.success(left)
@@ -552,7 +552,7 @@ class Parser:
             self.parse_next(res)
 
             node_to_return = res.register(self.expr())
-            res.is_valid()
+            if res.is_valid(): return res
 
             return res.success(FunctionDefinitionNode(
                 var_name_tok,

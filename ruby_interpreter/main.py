@@ -3,12 +3,7 @@ from Interpreter import *
 from Parser import *
 from Lexer import *
 from Context import *
-
-global_symbol_table = SymbolTable()
-global_symbol_table.set("NULL", Number(0))
-global_symbol_table.set("TRUE", Number(1))
-global_symbol_table.set("FALSE", Number(0))
-
+from GlobalSymbolTable import global_symbol_table
 
 def run(fn,text):
     lexer  = Lexer(fn, text)
@@ -35,4 +30,4 @@ while True:
     result, error = run("<stdin>", text)
 
     if error: print(error.as_string())
-    elif result: print(result)
+    elif result: print(repr(result))
