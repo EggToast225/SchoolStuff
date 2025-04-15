@@ -67,20 +67,23 @@ class VarAssignNode(Node):
 
 # Conditional Nodes
 class ForNode(Node):
-    def __init__(self, var_name_tok, start_value_node, end_value_node, step_value_node, body_node):
+    def __init__(self, var_name_tok, start_value_node, end_value_node, step_value_node, body_node, return_null):
         self.var_name_tok = var_name_tok
         self.start_value_node = start_value_node
         self.end_value_node = end_value_node
         self.step_value_node = step_value_node
         self.body_node = body_node
+        self.return_null = return_null
 
         self.pos_start = self.var_name_tok.pos_start
         self.pos_end = self.body_node.pos_end
 
 class WhileNode(Node):
-    def __init__(self, condition_node, body_node):
+    def __init__(self, condition_node, body_node, return_null):
         self.condition_node = condition_node
         self.body_node = body_node
+        self.return_null = return_null
+
 
         self.pos_start = self.condition_node.pos_start
         self.pos_end = self.body_node.pos_end
@@ -92,15 +95,17 @@ class IfNode(Node):
         self.else_case = else_case
 
         self.pos_start = self.cases[0][0].pos_start
-        self.pos_end = (self.else_case or self.cases[len(self.cases)-1][0]).pos_end
+        self.pos_end = (self.else_case or self.cases[len(self.cases)-1])[0].pos_end
+
 
 # Function Definition Node
 
 class FunctionDefinitionNode(Node):
-    def __init__(self, var_name_tok, arg_name_toks, boy_node):
+    def __init__(self, var_name_tok, arg_name_toks, boy_node, auto_return):
         self.var_name_tok = var_name_tok    # Function Name
         self.arg_name_toks = arg_name_toks  # List of arguments
         self.body_node = boy_node           # Body Node
+        self.auto_return = auto_return
 
         if self.var_name_tok:                   #If the function has a name, set position at function name
             self.pos_start = self.var_name_tok.pos_start
@@ -137,5 +142,22 @@ class ListNode(Node):
     def __init__(self, element_nodes, pos_start, pos_end):
         self.element_nodes = element_nodes
 
+        self.pos_start = pos_start
+        self.pos_end = pos_end
+
+class ReturnNode(Node):
+    def __init__(self, node_to_return, pos_start, pos_end):
+        self.node_to_return = node_to_return
+
+        self.pos_start = pos_start
+        self.pos_end = pos_end
+
+class ContinueNode(Node):
+    def __init__(self, pos_start, pos_end):
+        self.pos_start = pos_start
+        self.pos_end = pos_end
+
+class BreakNode(Node):
+    def __init__(self, pos_start, pos_end):
         self.pos_start = pos_start
         self.pos_end = pos_end

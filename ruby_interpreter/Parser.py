@@ -6,44 +6,60 @@ from ParseResult import ParseResult
 ###########################################################
 '''
     Grammar
+
+statements      : NEWLINES* statement(NEWLINE+ statement)* NEWLINE
+
+statement       : KEYWORD:RETURN expr?
+                : KEYWORD:CONTINUE
+                : KEYWORD:BREAK
+                : expr
+
     expr
-            : KEYWORD:VAR IDENTIFIER EQ expr
-            : comp-expr((KEYWORDS:AND | KEYWORD: OR); comp-expr)*
+                : KEYWORD:VAR IDENTIFIER EQ expr
+                : comp-expr((KEYWORDS:AND | KEYWORD: OR); comp-expr)*
             
-            : NOT comp-expr
-comp-expr   : arith-expr ((EE|LT|GE|LTE|GTE)) arith-expr)*
+                : NOT comp-expr
+comp-expr       : arith-expr ((EE|LT|GE|LTE|GTE)) arith-expr)*
 
-arith-expr  : term((PLUS|MINUS) term)*
+arith-expr      : term((PLUS|MINUS) term)*
 
-    term    : factor ((MUL|DIV) factor)*
+    term        : factor ((MUL|DIV) factor)*
 
-    factor  : (PLUS|MINUS) factor
-            : power
+    factor      : (PLUS|MINUS) factor
+                : power
 
-    power   : atom (POWER factor)*
+    power       : atom (POWER factor)*
 
-    call    : atom (LPAREN (expr (COMMA IDENTIFIER)*) RPAREN)?
+    call        : atom (LPAREN (expr (COMMA IDENTIFIER)*) RPAREN)?
 
-    atom    : INT | FLOAT | STRING | IDENTIFIER
-            : LPAREN expr RPAREN
-            : list_expr
-            : if-expr
-            : for-expr
-            : while-expr
-            : func-def
+    atom        : INT | FLOAT | STRING | IDENTIFIER
+                : LPAREN expr RPAREN
+                : list_expr
+                : if-expr
+                : for-expr
+                : while-expr
+                : func-def
 
-    if-expr : KEYWORD: IF expr KEYWORD:THEN expr
-              (KEYWORD:ELIF expr KEYWORD: THEN expr)*
-              (KEYWORD:ELSE expr)?
+    if-expr     : KEYWORD: IF expr KEYWORD:THEN
+                  (expr elif-expr|else-expr?)|(NEWLINE statements KEYWORD:END elif-expr|else-expr)
 
-    for-expr: KEYWORD:FOR IDENTIFIER EQ expr KEYWORD: TO expr
-              (KEYWORD:STEP expr)? KEYWORD:THEN expr
+    elif-expr   : KEYWORD: ELIF expr KEYWORD:THEN
+                  (expr elif-expr|else-expr?)|(NEWLINE statements KEYWORD:END elif-expr|else-expr)
+
+    else-expr   : KEYWORD: ELSE
+                  expr|(NEWLINE statements KEYWORD:END)
+                  
+
+    for-expr    : KEYWORD:FOR IDENTIFIER EQ expr KEYWORD: TO expr
+                  (KEYWORD:STEP expr)? KEYWORD:THEN expr
+                  expr|(NEWLINE statements KEYWORD:END)
     
-    while-expr: KEYWORD:WHILE expr KEYWORD:THEN expr
+    while-expr  : KEYWORD:WHILE expr KEYWORD:THEN expr
+                  expr|(NEWLINE statements KEYWORD:END)
 
-    func-def  : KEYWORD:FUN IDENTIFIER ?
-                LPAREN(IDENTIFIER (COMMA IDENTIFIER) *)? RPAREN
-                ARROW expr
+    func-def    : KEYWORD:FUN IDENTIFIER ?
+                  LPAREN(IDENTIFIER (COMMA IDENTIFIER) *)? RPAREN
+                  (ARROW expr)|(NEWLINE statements KEYWORD:END)
 '''
 ###########################################################
 
@@ -60,23 +76,24 @@ class Parser:
     
     def advance(self):
         self.tok_idx += 1
-        if self.tok_idx < len(self.tokens):
-            self.current_tok = self.tokens[self.tok_idx]
+        self.update_current_tok()
         return self.current_tok
     
-    def reverse(self):
-        self.tok_idx -=1
-        if  -1 < self.tok_idx < len(self.tokens):
-            self.current_tok = self.tokens[self.tok_idx]
+    def reverse(self, amount = 1):
+        self.tok_idx -= amount
+        self.update_current_tok()
         return self.current_tok
+    
+    def update_current_tok(self):
+        if self.tok_idx >=0 and self.tok_idx < len(self.tokens):
+            self.current_tok = self.tokens[self.tok_idx]
     
     def parse_next(self, ParseResult):
         ParseResult.register_advancement()
         self.advance()
 
-
     def parse(self):
-        res = self.expr() # Enters AST tree, with expression being the highest order
+        res = self.statements() # Enters AST tree, with expression being the highest order
         if not res.is_valid() and self.current_tok.type != TT_EOF: # If current_tok type isn't EOF, that means there's been a syntax error
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end,
@@ -84,6 +101,76 @@ class Parser:
                 ))
         return res
     
+    def statements(self):
+        res = ParseResult()
+        statements = []
+        pos_start = self.current_tok.pos_start.copy()
+
+        while self.current_tok.type == TT_NEWLINE: # Skip the NEWLINE tokens
+            self.parse_next()
+        
+        statement = res.register(self.statement())
+        if res.is_valid(): return res
+        statements.append(statement)
+
+        more_statements = True
+
+        while True: # Find more statements which are separated by newlines
+            new_line_count = 0 # Step is to get new line, then statement, then repeat until no statements or newline
+            while self.current_tok.type == TT_NEWLINE:
+                self.parse_next(res)
+                new_line_count += 1
+
+            if new_line_count == 0:
+                more_statements = False
+
+            if not more_statements: break # If there are no more statements, get out of loop
+
+            statement = res.try_register(self.statement()) # Try register see if there is a statement or not, if not, it returns None
+            if not statement:
+                self.reverse(res.to_reverse_count) # reverse the advance methods performed
+                more_statements = False
+                continue
+            statements.append(statement)
+        
+        return res.success(ListNode( # put list node so that each statement is evaluated
+            statements,
+            pos_start,
+            self.current_tok.pos_end.copy()
+        ))
+        
+    def statement(self):
+        res = ParseResult()
+        pos_start = self.current_tok.pos_start.copy()
+        
+        # Return a ReturnNode
+        if self.current_tok.matches(TT_KEYWORD, 'RETURN'):
+            self.parse_next(res)
+            expr = res.try_register(self.expr()) # expr is optional, so we use try_register
+            if not expr:
+                self.reverse(res.to_reverse_count)
+            return res.success(ReturnNode(expr, pos_start, self.current_tok.pos_start.copy()))
+        
+        # Return a ContinueNode
+        if self.current_tok.matches(TT_KEYWORD, 'CONTINUE'):
+            self.parse_next(res)
+            return res.success(ContinueNode(pos_start, self.current_tok.pos_start.copy()))
+        
+        #Return a BreakNode
+        if self.current_tok.matches(TT_KEYWORD, 'BREAK'):
+            self.parse_next(res)
+            return res.success(BreakNode(pos_start, self.current_tok.pos_start.copy()))
+        
+
+        expr = res.register(self.expr())
+        if res.error:
+            return res.failure(InvalidSyntaxError(
+            self.current_tok.pos_start, self.current_tok.pos_end,
+                "Expected 'RETURN', 'CONTINUE', 'BREAK', 'VAR', int, float, identifier, '+', '-', or '(', '[', 'IF', 'FOR','WHILE', and 'FUN'"
+            ))
+        return res.success(expr) 
+
+
     def call(self):
         res = ParseResult()
         # Search for an atom
@@ -224,20 +311,63 @@ class Parser:
         return res.success(ListNode(element_nodes,
                         pos_start,
                         self.current_tok.pos_end.copy()))
-
-        
-
+    
     def if_expr(self):
+        res = ParseResult()
+        all_cases = res.register(self.if_expr_cases('IF'))
+        if res.error: return res
+        cases, else_cases = all_cases
+        return res.success(IfNode(cases,else_cases))
+    
+    def elif_expr(self):
+        return self.if_expr_cases('ELIF')
+    
+    def else_expr(self):
+        res = ParseResult()
+        else_case = None
+
+        if self.current_tok.matches(TT_KEYWORD, 'ELSE'):
+            res.register_advancement()
+            self.advance()
+
+        if self.current_tok.type == TT_NEWLINE:
+            res.register_advancement()
+            self.advance()
+
+            statements = res.register(self.statements()) # get all the statements or lines
+            if res.error: return res
+            else_case = (statements, True)
+
+
+            if self.current_tok.matches(TT_KEYWORD, 'END'): # Look to see if there is an END keyword
+                res.register_advancement()
+                self.advance()
+            else:
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end,
+                    "Expected 'END'"
+                ))
+        else:
+            expr = res.register(self.statement())
+            if res.error: return res
+
+            else_case = (expr, False)
+        
+        return res.success(else_case)
+
+
+    def if_expr_cases(self, case_keyword):
         res = ParseResult()
         cases = []
         else_case = None
 
         # Checks if IF keyword is used
-        if not self.current_tok.matches(TT_KEYWORD, 'IF'):
+        if not self.current_tok.matches(TT_KEYWORD, case_keyword):
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end,
-                f"Expected 'IF'"
+                f"Expected '{case_keyword}'"
             ))
+        
         # If IF keyword is there, advance to the next part, which is conditions
         self.parse_next(res)
 
@@ -250,40 +380,54 @@ class Parser:
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end,
                 f"Expected 'THEN'"))
-        
         self.parse_next(res)
 
-        expr = res.register(self.expr())
-        if res.is_valid(): return res
-        # Append the cases of the condition
-        cases.append((condition, expr))
-
-        # Any number of ELIF statements, similar to IF, but using ELIF
-        while self.current_tok.matches(TT_KEYWORD, 'ELIF'):
+        # Now check if there are newlines or not
+        
+        # If there are multiple lines or newlines, we have to do a different approach to the parser
+        if self.current_tok.type == TT_NEWLINE:
             self.parse_next(res)
 
-            condition = res.register(self.expr())
+            statements = res.register(self.statements()) # get all the statements or lines
+            if res.error: return res
+            cases.append((condition, statements, True)) # Include a tuple with condition, statements, and Boolean True
+
+            if self.current_tok.matches(TT_KEYWORD, 'END'): # Look to see if there is an END keyword
+                self.parse_next()
+            else:
+                all_cases = res.register(self.if_expr_elif_or_else()) # Look if there are elif or else cases
+                if res.error: return res
+                new_cases, else_case, = all_cases
+                cases.extend(new_cases)
+        #If there isn't a newline character
+        else:
+            # IF condition: THEN expression
+            expr = res.register(self.statement())
             if res.is_valid(): return res
 
-            if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
-                return res.failure(InvalidSyntaxError(
-                    self.current_tok.pos_start, self.current_tok.pos_end,
-                    f"Expected 'THEN"))
-            
-            self.parse_next(res)
+            # Append the cases of the condition
+            cases.append((condition, expr, False))
 
-            expr = res.register(self.expr())
-            if res.is_valid(): return res
+            all_cases = res.register(self.if_expr_elif_or_else()) # Look if there are elif or else cases
+            if res.error: return res
+            new_cases, else_case, = all_cases
+            cases.extend(new_cases)
+        
+        return res.success((cases,else_case))
+    
+    def if_expr_elif_or_else(self):
+        res = ParseResult()
+        cases, else_case = [], None
 
-        # ELSE Keyword
-        if self.current_tok.matches(TT_KEYWORD, 'ELSE'):
-            self.parse_next(res)
+        if self.current_tok.matches(TT_KEYWORD, 'ELIF'):
+            all_cases = res.register(self.elif_expr())
+            if res.error: return res
+            cases, else_case = all_cases # update elif and else cases
+        else:
+            else_case = res.register(self.else_expr()) # only update the else case
+            if res.error: return res
 
-            expr = res.register(self.expr())
-            if res.is_valid(): return res
-            else_case = expr
-
-        return res.success(IfNode(cases,else_case))
+        return res.success((cases, else_case))
     
     def for_expr(self):
         res = ParseResult()
@@ -307,7 +451,6 @@ class Parser:
         
         # Get variable name
         var_name = self.current_tok
-
         self.parse_next(res)
 
         # Check for =
@@ -347,10 +490,24 @@ class Parser:
             ))
         self.parse_next(res)
 
-        body = res.register(self.expr())
+        if self.current_tok.type == TT_NEWLINE:
+            self.parse_next(res)
+
+            body = res.register(self.statements())
+            if res.is_valid(): return res
+            
+            if not self.current_tok.matches(TT_KEYWORD, 'END'):
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end,
+                    f"Expected 'END'"
+                ))
+            self.parse_next(res)
+            return res.success(ForNode(var_name, start_value, end_value, step_value, body, True))
+
+        body = res.register(self.statement())
         if res.is_valid(): return res
 
-        return res.success(ForNode(var_name, start_value, end_value, step_value, body))
+        return res.success(ForNode(var_name, start_value, end_value, step_value, body, False))
 
     def while_expr(self):
         res = ParseResult()
@@ -360,23 +517,38 @@ class Parser:
                     self.current_tok.pos_start, self.current_tok.pos_end,
                     "Expected 'WHILE'"
                 ))
+        
         self.parse_next(res)
 
         condition = res.register(self.expr())
         if res.is_valid(): return res
         
-        if self.current_tok.matches(TT_KEYWORD, 'THEN'):
+        if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
                 return res.failure(InvalidSyntaxError(
                     self.current_tok.pos_start, self.current_tok.pos_end,
                     "Expected 'THEN'"
                 ))
-        
         self.parse_next(res)
 
-        body = res.register(self.expr())
+        # IF NEWLINE
+        if self.current_tok.type == TT_NEWLINE:
+            self.parse_next(res)
+
+            body = res.register(self.statements())
+            if res.is_valid(): return res
+            
+            if not self.current_tok.matches(TT_KEYWORD, 'END'):
+                return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end,
+                    f"Expected 'END'"
+                ))
+            self.parse_next(res)
+            return res.success(WhileNode(condition, body, True))
+
+        body = res.register(self.statement())
         if res.is_valid(): return res
 
-        return res.success(WhileNode(condition, body))
+        return res.success(WhileNode(condition, body, False))
 
 
     def factor(self):
@@ -513,6 +685,8 @@ class Parser:
         self.parse_next(res)
 
         arg_name_toks = []
+
+        # If there is an identifier for the start
         if self.current_tok.type == TT_IDENTIFIER:
             arg_name_toks.append(self.current_tok)
             self.parse_next(res)
@@ -534,28 +708,45 @@ class Parser:
                     self.current_tok.pos_start, self.current_tok.pos_end,
                     "Expected ',' or ')'"
                 ))
-            else: # In the case that we dont have an identifier for the start
-                if self.current_tok.type != TT_RPAREN:
-                    return res.failure(InvalidSyntaxError(
-                        self.current_tok.pos_start, self.current_tok.pos_end,
-                        "Expected identifier or ')'"
-                    ))
-                
-            self.parse_next(res)
-
-            if self.current_tok.type != TT_ARROW:
+        else: # In the case that we dont have an identifier for the start
+            if self.current_tok.type != TT_RPAREN:
                 return res.failure(InvalidSyntaxError(
                     self.current_tok.pos_start, self.current_tok.pos_end,
-                    "Expected '->'"
+                    "Expected identifier or ')'"
                 ))
-            
+                
+        self.parse_next(res)
+
+        if self.current_tok.type == TT_ARROW:
             self.parse_next(res)
 
-            node_to_return = res.register(self.expr())
-            if res.is_valid(): return res
+            body = res.register(self.expr())
+            if res.error: return res
 
+            # In the instance of '->', set auto_return to True
             return res.success(FunctionDefinitionNode(
-                var_name_tok,
-                arg_name_toks,
-                node_to_return
+                var_name_tok, arg_name_toks,
+                body, True
+                ))
+            
+        if self.current_tok.type != TT_NEWLINE:
+            return res.failure(InvalidSyntaxError(
+                    self.current_tok.pos_start, self.current_tok.pos_end,
+                    f"Expected '->' or NEWLINE"
+                ))
+        self.parse_next(res)
+
+        body = res.register(self.statements())
+        if res.is_valid(): return res
+
+        if not self.current_tok.matches(TT_KEYWORD, 'END'):
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start, self.current_tok.pos_end,
+                f"Expected 'END'"
+            ))
+        self.parse_next(res)
+
+        return res.success(FunctionDefinitionNode(
+            var_name_tok, arg_name_toks,
+            body, False
             ))

@@ -8,6 +8,7 @@ class ParseResult: # Class keeps track of Parse results and Nodes
         self.error = None # Stores Errors
         self.advance_count = 0
         self.last_registered_count = 0
+        self.to_reverse_count = 0
         
     def register_advancement(self):
         self.last_registered_count = 1
@@ -34,3 +35,9 @@ class ParseResult: # Class keeps track of Parse results and Nodes
         if not self.error or self.advance_count == 0:
             self.error = error
         return self
+    
+    def try_register(self,res):
+        if res.error:
+            self.to_reverse_count = res.advance_count
+            return None
+        return self.register(res)

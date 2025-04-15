@@ -50,25 +50,30 @@ class Lexer(object):
             '"': TT_STRING
         }
 
+        line_characters = ';\n'
+
         while self.current_char != None:
             if self.current_char in ' \t': # If the current character is a space or tab, just skip it
                 self.advance()
-            elif self.current_char in DIGITS:
+            elif self.current_char in DIGITS: # If character is number
                 tokens.append(self.make_numbers())
             elif self.current_char in LETTERS:
-                tokens.append(self.make_identifier())
-            elif self.current_char in comparison_tokens:
+                tokens.append(self.make_identifier()) # If character is an alphabetical symbol
+            elif self.current_char in comparison_tokens: # If the character is a comparison symbol (!, >, <, =)
                 compare_token, error = self.make_comparison(comparison_tokens)
                 if error: return None, error
                 tokens.append(compare_token)
             elif self.current_char in single_char_tokens:
                 if self.current_char == '-':
-                    tokens.append(self.make_minus_or_arrow())
+                    tokens.append(self.make_minus_or_arrow()) # To differentiate '-' and '->'
                 else:
                     tokens.append(Token(single_char_tokens[self.current_char],pos_start=self.pos,pos_end=self.pos))
                     self.advance()
-            elif self.current_char in string_token:
+            elif self.current_char in string_token: # If the character is '"'
                 tokens.append(self.make_string())
+            elif self.current_char in line_characters:
+                tokens.append(Token(TT_NEWLINE, pos_start= self.pos, pos_end=self.pos))
+                self.advance()
 
             # case of an unrecognized character
             else:
