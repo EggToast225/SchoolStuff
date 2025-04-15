@@ -60,7 +60,11 @@ KEYWORDS = ['VAR',
             'FOR',
             'TO',
             'FUN',
-            'STEP'
+            'STEP',
+            'END',
+            'RETURN',
+            'CONTINUE',
+            'BREAK'
             ]
 
 # Functions
@@ -73,6 +77,9 @@ TT_STRING = 'STRING'
 # Lists
 TT_LSQUARE = 'LSQUARE'
 TT_RSQUARE = 'RSQUARE'
+
+# Line Tokens
+TT_NEWLINE = 'NEWLINE'
 
 ###############
 # TOKEN CLASS #
