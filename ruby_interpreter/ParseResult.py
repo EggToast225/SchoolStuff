@@ -32,7 +32,7 @@ class ParseResult: # Class keeps track of Parse results and Nodes
         return self
     
     def failure(self,error): # Used when an unexpected Error occurs; error will store IllegalCharError object
-        if not self.error or self.advance_count == 0:
+        if not self.error or self.last_registered_count == 0:
             self.error = error
         return self
     

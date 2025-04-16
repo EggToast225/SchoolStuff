@@ -247,7 +247,7 @@ class BaseFunction(Value):
     def check_and_populate_args(self, arg_names, args, exec_ctx):
         res = RTEResult()
         res.register(self.check_args(arg_names, args))
-        if res.is_valid(): return res
+        if res.error : return res
 
         self.populate_args(arg_names, args, exec_ctx)
 
@@ -304,8 +304,8 @@ class BuiltInFunction(BaseFunction):
         method_name = f'execute_{self.name}'
         method = getattr(self, method_name, self.no_visit_method)
 
-        res.register(self.check_and_populate_args(method.arg_names,args, exec_ctx))
-        if res.is_valid(): return res
+        res.register(self.check_and_populate_args(method.arg_names, args, exec_ctx))
+        if res.error: return res
 
         return_value = res.register(method(exec_ctx))
         if res.error: return res
@@ -430,6 +430,7 @@ class BuiltInFunction(BaseFunction):
         return RTEResult().success(element)
     execute_pop.arg_names = ['list', 'index']
 
+    # built in extend function
     def execute_extend(self,exec_ctx):
         list1 = exec_ctx.symbol_table.get("list1")
         list2 = exec_ctx.symbol_table.get("list2")
@@ -453,6 +454,58 @@ class BuiltInFunction(BaseFunction):
         return RTEResult().success(Number.null)
     execute_extend.arg_names = ["list1", 'list2']
 
+    def execute_len(self, exec_ctx):
+        list_ = exec_ctx.symbol_table.get("list")
+
+        if not isinstance(list_, List):
+            return RTEResult().failure(RunTimeError(
+                self.pos_start, self.pos_end,
+                f"Argument must be a list",
+                exec_ctx
+            ))
+        
+        return RTEResult().success(Number(len(list_.elements)))
+    execute_len.arg_names = ["list"]
+
+    # Execute Files
+    def execute_run(self, exec_ctx):
+        import main
+        fn = exec_ctx.symbol_table.get("fn")
+        if not isinstance(fn, String):
+            return RTEResult().failure(RunTimeError(
+                self.pos_start, self.pos_end,
+                "Argument must be sting",
+                exec_ctx
+                ))
+        
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+        fn = fn.value
+        file_path = os.path.abspath(fn)
+        
+        try:
+            with open(file_path, "r") as f:
+                script = f.read()
+        except Exception as e:
+            return RTEResult().failure(RunTimeError(
+                self.pos_start, self.pos_end,
+                f"Failed to load script {fn}" + str(e),
+                exec_ctx
+            ))
+        
+        _, error = main.run(fn, script)
+
+        if error:
+            return RTEResult().failure(RunTimeError(
+                    self.pos_start, self.pos_end,
+                    f"Failed to finishing executing script {fn} \n" +
+                    error.as_string(),
+                    exec_ctx
+                ))
+        
+        return RTEResult().success(Number.null)
+    execute_run.arg_names = ["fn"]
+
 # This creates a constant for the built-in function
 BuiltInFunction.print       = BuiltInFunction("print")
 BuiltInFunction.print_ret   = BuiltInFunction("print_ret")
@@ -466,3 +519,7 @@ BuiltInFunction.append      = BuiltInFunction("append")
 BuiltInFunction.pop         = BuiltInFunction("pop")
 BuiltInFunction.extend      = BuiltInFunction('extend')
 BuiltInFunction.clear       = BuiltInFunction('clear')
+BuiltInFunction.len         = BuiltInFunction('len')
+BuiltInFunction.run         = BuiltInFunction('run')
+
+

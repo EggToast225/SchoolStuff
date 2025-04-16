@@ -51,10 +51,13 @@ class Lexer(object):
         }
 
         line_characters = ';\n'
+        comment_char = '#'
 
         while self.current_char != None:
             if self.current_char in ' \t': # If the current character is a space or tab, just skip it
                 self.advance()
+            elif self.current_char == comment_char:
+                self.skip_comment()
             elif self.current_char in DIGITS: # If character is number
                 tokens.append(self.make_numbers())
             elif self.current_char in LETTERS:
@@ -176,3 +179,12 @@ class Lexer(object):
         
         self.advance()
         return Token(TT_STRING, string, pos_start, self.pos)
+    
+    def skip_comment(self): # Skips comment
+        self.advance()
+
+        while self.current_char != '\n': # If character isn't newline, just skip it
+            self.advance()
+
+        # Advance after newline
+        self.advance()

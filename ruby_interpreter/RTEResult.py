@@ -20,7 +20,6 @@ class RTEResult:
         self.func_return_value = res.func_return_value
         self.loop_continue = res.loop_continue
         self.break_loop = res.break_loop
-
         return res.value
     
     def success(self, value): # stop the propagation when a node is successful
@@ -55,6 +54,3 @@ class RTEResult:
             self.loop_continue or
             self.break_loop
         )
-    
-    def is_valid(self):
-        return bool(self.error)

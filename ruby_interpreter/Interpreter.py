@@ -140,13 +140,15 @@ class Interpreter:
         if node.step_value_node:
             step_value = res.register(self.visit(node.step_value_node, context))
             if res.should_return(): return res
+        else:
             step_value = Number(1)
 
         i = start_value.value
 
-        # Basically if we start from incrementing down or up
-        condition = lambda: i < end_value.value
-        if step_value.value < 0:
+        if step_value.value >= 0:
+            condition = lambda: i < end_value.value
+
+        else:
             condition = lambda: i > end_value.value
 
         while condition():
@@ -154,7 +156,7 @@ class Interpreter:
             i += step_value.value
 
             value = res.register(self.visit(node.body_node, context))
-            if res.should_return() and not res.loop_continue and not res.loop_break:
+            if res.should_return() and not res.loop_continue and not res.break_loop:
                 return res
 
             if res.loop_continue:
@@ -178,7 +180,7 @@ class Interpreter:
             if not condition.is_true(): break
 
             value = res.register(self.visit(node.body_node,context))
-            if res.should_return() and not res.loop_continue and not res.loop_break:
+            if res.should_return() and not res.loop_continue and not res.break_loop:
                 return res
             
             if res.loop_continue:
