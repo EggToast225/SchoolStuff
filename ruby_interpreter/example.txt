@@ -1,0 +1,4 @@
+i = -1
+if i < 0 then
+    puts "YOOOOO"
+end

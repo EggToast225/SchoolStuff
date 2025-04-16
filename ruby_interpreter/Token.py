@@ -110,7 +110,7 @@ class Token(object):
             self.pos_start = pos_end.copy()
     
     def matches(self, type_, value):
-        return self.type == type_ and self.value == value
+        return self.type == type_ and self.value.upper() == value
 
     def __repr__(self):
         if self.value: return f'{self.type}:{self.value}'

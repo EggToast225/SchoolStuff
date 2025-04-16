@@ -113,7 +113,7 @@ class Lexer(object):
             id_str += self.current_char
             self.advance()
         
-        if id_str in KEYWORDS: # if id_str is in KEYWORDS, it's a keyword, otherwise, it's an identifier
+        if id_str.upper() in KEYWORDS: # if id_str is in KEYWORDS, it's a keyword, otherwise, it's an identifier
             tok_type = TT_KEYWORD
         else:
             tok_type = TT_IDENTIFIER

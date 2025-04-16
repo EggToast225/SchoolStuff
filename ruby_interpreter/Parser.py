@@ -30,8 +30,10 @@ arith-expr      : term((PLUS|MINUS) term)*
 
     power       : atom (POWER factor)*
 
-    call        : atom (LPAREN (expr (COMMA IDENTIFIER)*) RPAREN)?
+                    # This is because parentheses are optional in ruby
+    call        : atom (LPAREN (expr (COMMA IDENTIFIER)*) RPAREN | (expr (COMMA IDENTIFIER)*) )?
 
+    
     atom        : INT | FLOAT | STRING | IDENTIFIER
                 : LPAREN expr RPAREN
                 : list_expr
@@ -90,11 +92,11 @@ class Parser:
 
     def parse(self):
         res = self.statements() # Enters AST tree, with expression being the highest order
-        
-        if not res.is_valid() and self.current_tok.type != TT_EOF: # If current_tok type isn't EOF, that means there's been a syntax error
+
+        if not res.error and self.current_tok.type != TT_EOF: # If current_tok type isn't EOF, that means there's been a syntax error
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end,
-                "Expected '+', '-' , '*' , '^', or '/'"
+                "Token cannot appear after previous tokens"
                 ))
         return res
     
@@ -201,7 +203,7 @@ class Parser:
                 self.advance()
                 expr = res.register(self.expr()) # Get the expression of that variable
 
-                if res.is_valid(): return res
+                if res.error: return res
                 return res.success(VarAssignNode(var_name, expr)) # Return Assign node
             
             self.reverse() # In the case that it's not an assignment, we need to go backtrack
@@ -220,17 +222,19 @@ class Parser:
         # Search for an atom
         atom = res.register(self.atom())
         if res.error: return res
-        
-        # If we have ( or list of arguments
+
+        arg_nodes = []
+
+        # If there are arguments surrounded by parenthesis
         if self.current_tok.type == TT_LPAREN:
             res.register_advancement()
             self.advance()
 
-            arg_nodes = []
             # In the case that we have an parenthesis with no args such as ()
             if self.current_tok.type == TT_RPAREN:
                 res.register_advancement()
                 self.advance()
+
             else: # If there are arguments
                 arg_nodes.append(res.register(self.expr()))
                 if res.error:
@@ -238,13 +242,14 @@ class Parser:
                     self.current_tok.pos_start, self.current_tok.pos_end,
                     "Expected ')', 'VAR', 'IF', 'FOR','WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[', or 'NOT')"
                 ))
+
                 # Argument in comma seperate; get all args and add them to list of args
                 while self.current_tok.type == TT_COMMA:
                     res.register_advancement()
                     self.advance()
 
                     arg_nodes.append(res.register(self.expr()))
-                    if res.is_valid(): return res
+                    if res.error: return res
 
                 # At the end of the list, close off with a ')'
                 if self.current_tok.type != TT_RPAREN:
@@ -256,6 +261,31 @@ class Parser:
                 self.advance()
             # Return the call node
             return res.success(CallNode(atom, arg_nodes))
+        # if there are no parenthesis
+
+        elif self.current_tok.type in [TT_IDENTIFIER, TT_STRING, TT_INT, TT_FLOAT]:
+            argument = res.register(self.expr()) 
+            if res.error:
+                return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start, self.current_tok.pos_end,
+                "Expected ')', 'VAR', 'IF', 'FOR','WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[', or 'NOT')"
+                ))
+                
+            arg_nodes.append(argument) # whatever is after the function name is the expression
+            
+                # Argument in comma seperate; get all args and add them to list of args
+            while self.current_tok.type == TT_COMMA: # this is true for ruby:  puts arg1, arg2
+                res.register_advancement()
+                self.advance()
+
+                # Add these to arguments to be evaluated
+                argument = res.register(self.expr())
+                if res.error: return res
+                arg_nodes.append(argument)
+                
+            # Ok now we return this as a regular callnode
+            return res.success(CallNode(atom, arg_nodes))
+        
         # Return a regular atom
         return res.success(atom)
 
@@ -581,7 +611,7 @@ class Parser:
             return res.success(ForNode(var_name, start_value, end_value, step_value, body, True))
 
         body = res.register(self.statement())
-        if res.is_valid(): return res
+        if res.error: return res
 
         return res.success(ForNode(var_name, start_value, end_value, step_value, body, False))
 
@@ -659,7 +689,7 @@ class Parser:
             self.advance()
 
             node = res.register(self.comp_expr())
-            if res.is_valid(): return res
+            if res.error: return res
             return res.success(UnaryOpNode(op_tok, node))
 
             
@@ -701,7 +731,7 @@ class Parser:
             self.advance()
             
             right = res.register(func_b()) # Get right-side expression
-            if res.is_valid(): return res
+            if res.error: return res
             left = BinaryOperatorNode(left, op_tok, right)
         
         return res.success(left)
