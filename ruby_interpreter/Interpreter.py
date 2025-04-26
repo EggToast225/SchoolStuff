@@ -131,40 +131,55 @@ class Interpreter:
         res = RTEResult()
         elements = []
 
-        start_value = res.register(self.visit(node.start_value_node, context))
-        if res.should_return(): return res
-
-        end_value = res.register(self.visit(node.end_value_node, context))
-        if res.should_return(): return res
-        
-        if node.step_value_node:
-            step_value = res.register(self.visit(node.step_value_node, context))
+        if node.start_value_node and node.end_value_node:
+            start_value = res.register(self.visit(node.start_value_node, context))
             if res.should_return(): return res
-        else:
-            step_value = Number(1)
 
-        i = start_value.value
+            end_value = res.register(self.visit(node.end_value_node, context))
+            if res.should_return(): return res
+            
+            if node.step_value_node:
+                step_value = res.register(self.visit(node.step_value_node, context))
+                if res.should_return(): return res
+            else:
+                step_value = Number(1)
 
-        if step_value.value >= 0:
-            condition = lambda: i < end_value.value
+            i = start_value.value
 
-        else:
-            condition = lambda: i > end_value.value
+            if step_value.value >= 0:
+                condition = lambda: i < end_value.value
 
-        while condition():
-            context.symbol_table.set(node.var_name_tok.value, Number(i))
-            i += step_value.value
+            else:
+                condition = lambda: i > end_value.value
 
-            value = res.register(self.visit(node.body_node, context))
-            if res.should_return() and not res.loop_continue and not res.break_loop:
-                return res
+            while condition():
+                context.symbol_table.set(node.var_name_tok.value, Number(i))
+                i += step_value.value
 
-            if res.loop_continue:
-                continue
-            if res.break_loop:
-                break
-            elements.append(value)
-        
+                value = res.register(self.visit(node.body_node, context))
+                if res.should_return() and not res.loop_continue and not res.break_loop:
+                    return res
+
+                if res.loop_continue:
+                    continue
+                if res.break_loop:
+                    break
+                elements.append(value)
+            
+        elif node.iterable_node:
+            iterable_value = res.register(self.visit(node.iterable_node, context))
+
+            for item in iterable_value.elements:
+                context.symbol_table.set(node.var_name_tok.value, item)
+                value = res.register(self.visit(node.body_node, context))
+                if res.should_return() and not res.loop_continue and not res.break_loop:
+                    return res
+                if res.loop_continue:
+                    continue
+                if res.break_loop:
+                    break
+                elements.append(value)
+
         if node.return_null: return res.success(Number.null)
 
         return res.success(List(elements).set_context(context).set_pos(node.pos_start, node.pos_end))

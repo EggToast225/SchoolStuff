@@ -58,13 +58,16 @@ KEYWORDS = ['VAR',
             'WHILE',
             'FUNC',
             'FOR',
+            'IN',
             'TO',
             'FUN',
             'STEP',
             'END',
             'RETURN',
             'CONTINUE',
-            'BREAK'
+            'BREAK',
+            'DO',
+            'UNTIL'
             ]
 
 # Functions
@@ -80,6 +83,9 @@ TT_RSQUARE = 'RSQUARE'
 
 # Line Tokens
 TT_NEWLINE = 'NEWLINE'
+
+# iteratable
+TT_DOTDOT = 'DOTDOT'
 
 ###############
 # TOKEN CLASS #

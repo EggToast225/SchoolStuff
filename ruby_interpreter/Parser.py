@@ -42,7 +42,7 @@ arith-expr      : term((PLUS|MINUS) term)*
                 : while-expr
                 : func-def
 
-    if-expr     : KEYWORD: IF expr KEYWORD:THEN
+    if-expr     : KEYWORD: IF expr
                   (expr elif-expr|else-expr?)|(NEWLINE statements KEYWORD:END elif-expr|else-expr)
 
     elif-expr   : KEYWORD: ELIF expr KEYWORD:THEN
@@ -52,8 +52,8 @@ arith-expr      : term((PLUS|MINUS) term)*
                   expr|(NEWLINE statements KEYWORD:END)
                   
 
-    for-expr    : KEYWORD:FOR IDENTIFIER EQ expr KEYWORD: TO expr
-                  (KEYWORD:STEP expr)? KEYWORD:THEN expr
+    for-expr    : KEYWORD:FOR IDENTIFIER EQ expr (KEYWORD: TO expr| KEYWORD: IN expr)
+                  (KEYWORD:STEP expr)?
                   expr|(NEWLINE statements KEYWORD:END)
     
     while-expr  : KEYWORD:WHILE expr KEYWORD:THEN expr
@@ -466,14 +466,17 @@ class Parser:
         condition = res.register(self.expr())
         if res.error: return res
 
+        '''
         #THEN Keyword check (if the condition is true, then)
         if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end,
                 f"Expected 'THEN'"))
         
+        
         res.register_advancement()
         self.advance()
+        '''
 
         # Now check if there are newlines or not
         # If there are multiple lines or newlines, we have to do a different approach to the parser
@@ -538,7 +541,7 @@ class Parser:
         self.advance()
 
         # Expect Identifier after FOR
-        if self.current_tok.type != TT_IDENTIFIER: 
+        if self.current_tok.type != TT_IDENTIFIER:
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end,
                 "Expected Identifier"
@@ -549,12 +552,38 @@ class Parser:
         res.register_advancement()
         self.advance()
 
-        # Check for '='
-        if self.current_tok.type != TT_EQ:
-            return res.failure(InvalidSyntaxError(
+        # Check for 'IN'
+        if self.current_tok.matches(TT_KEYWORD, 'IN'):
+            res.register_advancement()
+            self.advance()
+
+            # should be a list
+            iterable_node = res.register(self.expr())
+            if res.error: return res
+
+            if self.current_tok.type == TT_NEWLINE:
+                res.register_advancement()
+                self.advance()
+
+            body = res.register(self.statements())
+            if res.error: return res
+
+            if not self.current_tok.matches(TT_KEYWORD, 'END'):
+                return res.failure(InvalidSyntaxError(
                     self.current_tok.pos_start, self.current_tok.pos_end,
-                    "Expected '='"
+                    "Expected 'END'"
                 ))
+
+            res.register_advancement()
+            self.advance()
+
+            return res.success(ForNode(var_name, None, None, None, body, True, iterable_node))
+        
+        elif self.current_tok.type != TT_EQ:
+            return res.failure(InvalidSyntaxError(
+                self.current_tok.pos_start, self.current_tok.pos_end,
+                "Expected '=' or 'IN'"
+            ))
         
         res.register_advancement()
         self.advance()
@@ -567,7 +596,7 @@ class Parser:
                 self.current_tok.pos_start, self.current_tok.pos_end,
                 f"Expected 'TO'"
             ))
-        
+            
         res.register_advancement()
         self.advance()
 
@@ -583,15 +612,6 @@ class Parser:
         else:
             step_value = None
         
-        if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
-            return res.failure(InvalidSyntaxError(
-                self.current_tok.pos_start, self.current_tok.pos_end,
-                f"Expected 'THEN'"
-            ))
-        
-        res.register_advancement()
-        self.advance()
-
         if self.current_tok.type == TT_NEWLINE:
             res.register_advancement()
             self.advance()
@@ -607,7 +627,6 @@ class Parser:
             
             res.register_advancement()
             self.advance()
-
             return res.success(ForNode(var_name, start_value, end_value, step_value, body, True))
 
         body = res.register(self.statement())
@@ -630,6 +649,7 @@ class Parser:
         condition = res.register(self.expr())
         if res.error: return res
         
+        '''
         if not self.current_tok.matches(TT_KEYWORD, 'THEN'):
             return res.failure(InvalidSyntaxError(
                 self.current_tok.pos_start, self.current_tok.pos_end,
@@ -638,6 +658,7 @@ class Parser:
         
         res.register_advancement()
         self.advance()
+        '''
 
         # IF NEWLINE
         if self.current_tok.type == TT_NEWLINE:

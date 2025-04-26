@@ -67,13 +67,14 @@ class VarAssignNode(Node):
 
 # Conditional Nodes
 class ForNode(Node):
-    def __init__(self, var_name_tok, start_value_node, end_value_node, step_value_node, body_node, return_null):
+    def __init__(self, var_name_tok, start_value_node, end_value_node, step_value_node, body_node, return_null, iterable_node):
         self.var_name_tok = var_name_tok
         self.start_value_node = start_value_node
         self.end_value_node = end_value_node
         self.step_value_node = step_value_node
         self.body_node = body_node
         self.return_null = return_null
+        self.iterable_node = iterable_node
 
         self.pos_start = self.var_name_tok.pos_start
         self.pos_end = self.body_node.pos_end
