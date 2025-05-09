@@ -211,6 +211,33 @@ class Interpreter:
             List(elements).set_context(context).set_pos(node.pos_start, node.pos_end)
             )
     
+    def visit_UntilNode(self, node,context):
+        res = RTEResult()
+        elements = []
+
+        while True:
+            condition = res.register(self.visit(node.condition_node, context))
+            if res.should_return(): return res
+
+            if condition.is_true(): break # The until node is just a NOT while loop. 
+
+            value = res.register(self.visit(node.body_node,context))
+            if res.should_return() and not res.loop_continue and not res.break_loop:
+                return res
+            
+            if res.loop_continue:
+                continue
+            if res.break_loop:
+                break
+
+            elements.append(value)
+
+        
+        if node.return_null: return res.success(Number.null)
+        return res.success(
+            List(elements).set_context(context).set_pos(node.pos_start, node.pos_end)
+            )
+    
     def visit_FunctionDefinitionNode(self, node, context):
         res = RTEResult()
 

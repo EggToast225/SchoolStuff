@@ -47,13 +47,12 @@ TT_LESS_THAN_EQUALS     = 'LTE'
 TT_NE                   = 'NE'
 
 
-KEYWORDS = ['VAR',
-            'AND',
+KEYWORDS = ['AND',
             'OR',
             'NOT',
             'IF',
             'THEN',
-            'ELIF',
+            'ELSIF',
             'ELSE',
             'WHILE',
             'FUNC',

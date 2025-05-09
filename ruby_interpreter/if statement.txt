@@ -1,6 +1,6 @@
 i = -1
 if i > 0
     puts "YOOOOO"
-elif i < 0
+elsif i < 0
     puts "NOOOOO"
 end

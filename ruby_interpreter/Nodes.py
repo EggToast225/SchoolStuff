@@ -85,9 +85,18 @@ class WhileNode(Node):
         self.body_node = body_node
         self.return_null = return_null
 
+        self.pos_start = self.condition_node.pos_start
+        self.pos_end = self.body_node.pos_end
+
+class UntilNode(Node):
+    def __init__(self, condition_node, body_node, return_null):
+        self.condition_node = condition_node
+        self.body_node = body_node
+        self.return_null = return_null
 
         self.pos_start = self.condition_node.pos_start
         self.pos_end = self.body_node.pos_end
+
 
 
 class IfNode(Node):
@@ -100,7 +109,6 @@ class IfNode(Node):
 
 
 # Function Definition Node
-
 class FunctionDefinitionNode(Node):
     def __init__(self, var_name_tok, arg_name_toks, boy_node, auto_return):
         self.var_name_tok = var_name_tok    # Function Name
